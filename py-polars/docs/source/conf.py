@@ -16,6 +16,8 @@ import os
 import sys
 import warnings
 
+import sphinx_autosummary_accessors
+
 # add polars directory
 sys.path.insert(0, os.path.abspath("../.."))
 
@@ -43,10 +45,11 @@ extensions = [
     "sphinx.ext.linkcode",
     "sphinx.ext.mathjax",
     "sphinx.ext.todo",
+    "sphinx_autosummary_accessors",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
+templates_path = ["_templates", sphinx_autosummary_accessors.templates_path]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -84,7 +87,17 @@ html_theme_options = {
         {
             "name": "GitHub",
             "url": "https://github.com/pola-rs/polars",
-            "icon": "fab fa-github-square",
+            "icon": "fa-brands fa-github",
+        },
+        {
+            "name": "Discord",
+            "url": "https://discord.gg/4UfP5cfBE7",
+            "icon": "fa-brands fa-discord",
+        },
+        {
+            "name": "Twitter",
+            "url": "https://twitter.com/DataPolars",
+            "icon": "fa-brands fa-twitter",
         },
     ],
     "favicons": [
