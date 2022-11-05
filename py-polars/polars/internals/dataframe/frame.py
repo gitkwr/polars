@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import os
 import sys
+from collections.abc import Sized
 from io import BytesIO, IOBase, StringIO
 from pathlib import Path
 from typing import (
@@ -11,6 +12,8 @@ from typing import (
     Any,
     BinaryIO,
     Callable,
+    Generator,
+    Iterable,
     Iterator,
     Mapping,
     NoReturn,
@@ -48,6 +51,7 @@ from polars.exceptions import NoRowsReturned, TooManyRowsReturned
 from polars.internals.construction import (
     arrow_to_pydf,
     dict_to_pydf,
+    iterable_to_pydf,
     numpy_to_pydf,
     pandas_to_pydf,
     sequence_to_pydf,
@@ -279,15 +283,18 @@ class DataFrame:
             self._df = sequence_to_pydf(
                 data, columns=columns, orient=orient, infer_schema_length=50
             )
-
         elif isinstance(data, pli.Series):
             self._df = series_to_pydf(data, columns=columns)
 
         elif _PANDAS_TYPE(data) and isinstance(data, pd.DataFrame):
             self._df = pandas_to_pydf(data, columns=columns)
 
+        elif isinstance(data, (Generator, Iterable)) and not isinstance(data, Sized):
+            self._df = iterable_to_pydf(data, columns=columns, orient=orient)
         else:
-            raise ValueError("DataFrame constructor not called properly.")
+            raise ValueError(
+                f"DataFrame constructor called with unsupported type; got {type(data)}"
+            )
 
     @classmethod
     def _from_pydf(cls: type[DF], py_df: PyDataFrame) -> DF:
@@ -1071,6 +1078,9 @@ class DataFrame:
         other = _prepare_other_arg(other)
         return self._from_pydf(self._df.mul(other._s))
 
+    def __rmul__(self: DF, other: DataFrame | pli.Series | int | float | bool) -> DF:
+        return self * other
+
     def __truediv__(self: DF, other: DataFrame | pli.Series | int | float | bool) -> DF:
         if isinstance(other, DataFrame):
             return self._from_pydf(self._df.div_df(other._df))
@@ -1079,13 +1089,19 @@ class DataFrame:
         return self._from_pydf(self._df.div(other._s))
 
     def __add__(
-        self: DF,
-        other: DataFrame | pli.Series | int | float | bool | str,
+        self: DF, other: DataFrame | pli.Series | int | float | bool | str
     ) -> DF:
         if isinstance(other, DataFrame):
             return self._from_pydf(self._df.add_df(other._df))
         other = _prepare_other_arg(other)
         return self._from_pydf(self._df.add(other._s))
+
+    def __radd__(
+        self: DF, other: DataFrame | pli.Series | int | float | bool | str
+    ) -> DF:
+        if isinstance(other, str):
+            return self.select((pli.lit(other) + pli.col("*")).keep_name())
+        return self + other
 
     def __sub__(self: DF, other: DataFrame | pli.Series | int | float | bool) -> DF:
         if isinstance(other, DataFrame):
@@ -3872,6 +3888,42 @@ class DataFrame:
         │ 3    ┆ 8.0  ┆ c   ┆ null  │
         └──────┴──────┴─────┴───────┘
 
+        >>> df.join(other_df, on="ham", how="left")
+        shape: (3, 4)
+        ┌─────┬─────┬─────┬───────┐
+        │ foo ┆ bar ┆ ham ┆ apple │
+        │ --- ┆ --- ┆ --- ┆ ---   │
+        │ i64 ┆ f64 ┆ str ┆ str   │
+        ╞═════╪═════╪═════╪═══════╡
+        │ 1   ┆ 6.0 ┆ a   ┆ x     │
+        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌┤
+        │ 2   ┆ 7.0 ┆ b   ┆ y     │
+        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌┤
+        │ 3   ┆ 8.0 ┆ c   ┆ null  │
+        └─────┴─────┴─────┴───────┘
+
+        >>> df.join(other_df, on="ham", how="semi")
+        shape: (2, 3)
+        ┌─────┬─────┬─────┐
+        │ foo ┆ bar ┆ ham │
+        │ --- ┆ --- ┆ --- │
+        │ i64 ┆ f64 ┆ str │
+        ╞═════╪═════╪═════╡
+        │ 1   ┆ 6.0 ┆ a   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
+        │ 2   ┆ 7.0 ┆ b   │
+        └─────┴─────┴─────┘
+
+        >>> df.join(other_df, on="ham", how="anti")
+        shape: (1, 3)
+        ┌─────┬─────┬─────┐
+        │ foo ┆ bar ┆ ham │
+        │ --- ┆ --- ┆ --- │
+        │ i64 ┆ f64 ┆ str │
+        ╞═════╪═════╪═════╡
+        │ 3   ┆ 8.0 ┆ c   │
+        └─────┴─────┴─────┘
+
         Notes
         -----
         For joining on columns with categorical data, see ``pl.StringCache()``.
@@ -4458,6 +4510,53 @@ class DataFrame:
         ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 4   ┆ 13.0 │
         └─────┴──────┘
+        >>> df.fill_null(strategy="forward")
+        shape: (4, 2)
+        ┌─────┬──────┐
+        │ a   ┆ b    │
+        │ --- ┆ ---  │
+        │ i64 ┆ f64  │
+        ╞═════╪══════╡
+        │ 1   ┆ 0.5  │
+        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
+        │ 2   ┆ 4.0  │
+        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
+        │ 2   ┆ 4.0  │
+        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
+        │ 4   ┆ 13.0 │
+        └─────┴──────┘
+
+        >>> df.fill_null(strategy="max")
+        shape: (4, 2)
+        ┌─────┬──────┐
+        │ a   ┆ b    │
+        │ --- ┆ ---  │
+        │ i64 ┆ f64  │
+        ╞═════╪══════╡
+        │ 1   ┆ 0.5  │
+        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
+        │ 2   ┆ 4.0  │
+        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
+        │ 4   ┆ 13.0 │
+        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
+        │ 4   ┆ 13.0 │
+        └─────┴──────┘
+
+        >>> df.fill_null(strategy="zero")
+        shape: (4, 2)
+        ┌─────┬──────┐
+        │ a   ┆ b    │
+        │ --- ┆ ---  │
+        │ i64 ┆ f64  │
+        ╞═════╪══════╡
+        │ 1   ┆ 0.5  │
+        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
+        │ 2   ┆ 4.0  │
+        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
+        │ 0   ┆ 0.0  │
+        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
+        │ 4   ┆ 13.0 │
+        └─────┴──────┘
 
         """
         return self._from_pydf(
@@ -4974,6 +5073,33 @@ class DataFrame:
          ╞═════╪═════╪═════╡
          │ C   ┆ 2   ┆ l   │
          └─────┴─────┴─────┘]
+        >>> df.partition_by(groups="foo", maintain_order=True, as_dict=True)
+        {'A': shape: (2, 3)
+        ┌─────┬─────┬─────┐
+        │ foo ┆ N   ┆ bar │
+        │ --- ┆ --- ┆ --- │
+        │ str ┆ i64 ┆ str │
+        ╞═════╪═════╪═════╡
+        │ A   ┆ 1   ┆ k   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
+        │ A   ┆ 2   ┆ l   │
+        └─────┴─────┴─────┘, 'B': shape: (2, 3)
+        ┌─────┬─────┬─────┐
+        │ foo ┆ N   ┆ bar │
+        │ --- ┆ --- ┆ --- │
+        │ str ┆ i64 ┆ str │
+        ╞═════╪═════╪═════╡
+        │ B   ┆ 2   ┆ m   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
+        │ B   ┆ 4   ┆ m   │
+        └─────┴─────┴─────┘, 'C': shape: (1, 3)
+        ┌─────┬─────┬─────┐
+        │ foo ┆ N   ┆ bar │
+        │ --- ┆ --- ┆ --- │
+        │ str ┆ i64 ┆ str │
+        ╞═════╪═════╪═════╡
+        │ C   ┆ 2   ┆ l   │
+        └─────┴─────┴─────┘}
 
         """
         if isinstance(groups, str):
@@ -5209,6 +5335,62 @@ class DataFrame:
         │ 3   │
         └─────┘
 
+        >>> df.select(["foo", "bar"])
+        shape: (3, 2)
+        ┌─────┬─────┐
+        │ foo ┆ bar │
+        │ --- ┆ --- │
+        │ i64 ┆ i64 │
+        ╞═════╪═════╡
+        │ 1   ┆ 6   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┤
+        │ 2   ┆ 7   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┤
+        │ 3   ┆ 8   │
+        └─────┴─────┘
+
+        >>> df.select(pl.col("foo") + 1)
+        shape: (3, 1)
+        ┌─────┐
+        │ foo │
+        │ --- │
+        │ i64 │
+        ╞═════╡
+        │ 2   │
+        ├╌╌╌╌╌┤
+        │ 3   │
+        ├╌╌╌╌╌┤
+        │ 4   │
+        └─────┘
+
+        >>> df.select([pl.col("foo") + 1, pl.col("bar") + 1])
+        shape: (3, 2)
+        ┌─────┬─────┐
+        │ foo ┆ bar │
+        │ --- ┆ --- │
+        │ i64 ┆ i64 │
+        ╞═════╪═════╡
+        │ 2   ┆ 7   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┤
+        │ 3   ┆ 8   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┤
+        │ 4   ┆ 9   │
+        └─────┴─────┘
+
+        >>> df.select(pl.when(pl.col("foo") > 2).then(10).otherwise(0))
+        shape: (3, 1)
+        ┌─────────┐
+        │ literal │
+        │ ---     │
+        │ i64     │
+        ╞═════════╡
+        │ 0       │
+        ├╌╌╌╌╌╌╌╌╌┤
+        │ 0       │
+        ├╌╌╌╌╌╌╌╌╌┤
+        │ 10      │
+        └─────────┘
+
         """
         return self._from_pydf(
             self.lazy()
@@ -5329,6 +5511,8 @@ class DataFrame:
         ... )
         >>> df.n_chunks()
         1
+        >>> df.n_chunks(strategy="all")
+        [1, 1, 1]
 
         """
         if strategy == "first":
@@ -5486,6 +5670,14 @@ class DataFrame:
         ╞═════╪═════╪══════╡
         │ 6   ┆ 21  ┆ null │
         └─────┴─────┴──────┘
+        >>> df.sum(axis=1)
+        shape: (3,)
+        Series: 'foo' [str]
+        [
+                "16a"
+                "27b"
+                "38c"
+        ]
 
         """
         if axis == 0:
@@ -5555,6 +5747,23 @@ class DataFrame:
         │ 2.0 ┆ 7.0 ┆ null │
         └─────┴─────┴──────┘
 
+        Note: a PanicException is raised with axis = 1 and a string column.
+
+        >>> df = pl.DataFrame(
+        ...     {
+        ...         "foo": [1, 2, 3],
+        ...         "bar": [6, 7, 8],
+        ...     }
+        ... )
+        >>> df.mean(axis=1)
+        shape: (3,)
+        Series: 'foo' [f64]
+        [
+                3.5
+                4.5
+                5.5
+        ]
+
         Note: the mean of booleans evaluates to null.
 
         >>> df = pl.DataFrame(
@@ -5619,6 +5828,15 @@ class DataFrame:
         ╞═════╪═════╪══════╡
         │ 1.0 ┆ 1.0 ┆ null │
         └─────┴─────┴──────┘
+        >>> df.std(ddof=0)
+        shape: (1, 3)
+        ┌──────────┬──────────┬──────┐
+        │ foo      ┆ bar      ┆ ham  │
+        │ ---      ┆ ---      ┆ ---  │
+        │ f64      ┆ f64      ┆ str  │
+        ╞══════════╪══════════╪══════╡
+        │ 0.816497 ┆ 0.816497 ┆ null │
+        └──────────┴──────────┴──────┘
 
         """
         return self._from_pydf(self._df.std(ddof))
@@ -5650,6 +5868,15 @@ class DataFrame:
         ╞═════╪═════╪══════╡
         │ 1.0 ┆ 1.0 ┆ null │
         └─────┴─────┴──────┘
+        >>> df.var(ddof=0)
+        shape: (1, 3)
+        ┌──────────┬──────────┬──────┐
+        │ foo      ┆ bar      ┆ ham  │
+        │ ---      ┆ ---      ┆ ---  │
+        │ f64      ┆ f64      ┆ str  │
+        ╞══════════╪══════════╪══════╡
+        │ 0.666667 ┆ 0.666667 ┆ null │
+        └──────────┴──────────┴──────┘
 
         """
         return self._from_pydf(self._df.var(ddof))

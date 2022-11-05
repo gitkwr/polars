@@ -2,8 +2,19 @@ from __future__ import annotations
 
 import math
 import warnings
+from collections.abc import Sized
 from datetime import date, datetime, time, timedelta
-from typing import TYPE_CHECKING, Any, Callable, NoReturn, Sequence, Union, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Generator,
+    Iterable,
+    NoReturn,
+    Sequence,
+    Union,
+    overload,
+)
 from warnings import warn
 
 from polars import internals as pli
@@ -44,8 +55,10 @@ from polars.dependencies import (
 from polars.dependencies import numpy as np
 from polars.dependencies import pandas as pd
 from polars.dependencies import pyarrow as pa
+from polars.exceptions import ShapeError
 from polars.internals.construction import (
     arrow_to_pyseries,
+    iterable_to_pyseries,
     numpy_to_pyseries,
     pandas_to_pyseries,
     sequence_to_pyseries,
@@ -182,7 +195,7 @@ class Series:
     def __init__(
         self,
         name: str | ArrayLike | None = None,
-        values: ArrayLike | Sequence[Any] | None = None,
+        values: ArrayLike | None = None,
         dtype: type[DataType] | DataType | None = None,
         strict: bool = True,
         nan_to_null: bool = False,
@@ -206,8 +219,10 @@ class Series:
             )
         elif isinstance(values, Series):
             self._s = series_to_pyseries(name, values)
+
         elif _PYARROW_TYPE(values) and isinstance(values, (pa.Array, pa.ChunkedArray)):
             self._s = arrow_to_pyseries(name, values)
+
         elif _NUMPY_TYPE(values) and isinstance(values, np.ndarray):
             self._s = numpy_to_pyseries(name, values, strict, nan_to_null)
             if values.dtype.type == np.datetime64:
@@ -223,14 +238,40 @@ class Series:
 
             if dtype is not None:
                 self._s = self.cast(dtype, strict=True)._s
+
+        elif isinstance(values, range):
+            self._s = (
+                pli.arange(
+                    low=values.start,
+                    high=values.stop,
+                    step=values.step,
+                    eager=True,
+                    dtype=dtype,
+                )
+                .rename(name, in_place=True)
+                ._s
+            )
         elif isinstance(values, Sequence):
             self._s = sequence_to_pyseries(
                 name, values, dtype=dtype, strict=strict, dtype_if_empty=dtype_if_empty
             )
         elif _PANDAS_TYPE(values) and isinstance(values, (pd.Series, pd.DatetimeIndex)):
             self._s = pandas_to_pyseries(name, values)
+
+        elif isinstance(values, (Generator, Iterable)) and not isinstance(
+            values, Sized
+        ):
+            self._s = iterable_to_pyseries(
+                name,
+                values,
+                dtype=dtype,
+                strict=strict,
+                dtype_if_empty=dtype_if_empty,
+            )
         else:
-            raise ValueError("Series constructor not called properly.")
+            raise ValueError(
+                f"Series constructor called with unsupported type; got {type(values)}"
+            )
 
     @classmethod
     def _from_pyseries(cls, pyseries: PySeries) -> Series:
@@ -437,9 +478,19 @@ class Series:
             )
         return wrap_s(f(other))
 
+    @overload
+    def __add__(self, other: pli.DataFrame) -> pli.DataFrame:  # type: ignore[misc]
+        ...
+
+    @overload
     def __add__(self, other: Any) -> Series:
+        ...
+
+    def __add__(self, other: Any) -> Series | pli.DataFrame:
         if isinstance(other, str):
             other = Series("", [other])
+        elif isinstance(other, pli.DataFrame):
+            return other + self
         return self._arithmetic(other, "add", "add_<>")
 
     def __sub__(self, other: Any) -> Series:
@@ -464,10 +515,26 @@ class Series:
             result = result.floor()
         return result
 
+    def __invert__(self) -> Series:
+        if self.dtype == Boolean:
+            return wrap_s(self._s._not())
+        return NotImplemented
+
+    @overload
+    def __mul__(self, other: pli.DataFrame) -> pli.DataFrame:  # type: ignore[misc]
+        ...
+
+    @overload
     def __mul__(self, other: Any) -> Series:
+        ...
+
+    def __mul__(self, other: Any) -> Series | pli.DataFrame:
         if self.is_datelike():
             raise ValueError("first cast to integer before multiplying datelike dtypes")
-        return self._arithmetic(other, "mul", "mul_<>")
+        elif isinstance(other, pli.DataFrame):
+            return other * self
+        else:
+            return self._arithmetic(other, "mul", "mul_<>")
 
     def __mod__(self, other: Any) -> Series:
         if self.is_datelike():
@@ -484,15 +551,12 @@ class Series:
         return self._arithmetic(other, "rem", "rem_<>_rhs")
 
     def __radd__(self, other: Any) -> Series:
+        if isinstance(other, str):
+            return (other + self.to_frame()).to_series()
         return self._arithmetic(other, "add", "add_<>_rhs")
 
     def __rsub__(self, other: Any) -> Series:
         return self._arithmetic(other, "sub", "sub_<>_rhs")
-
-    def __invert__(self) -> Series:
-        if self.dtype == Boolean:
-            return wrap_s(self._s._not())
-        return NotImplemented
 
     def __rtruediv__(self, other: Any) -> Series:
         if self.is_datelike():
@@ -502,7 +566,6 @@ class Series:
 
         if isinstance(other, int):
             other = float(other)
-
         return self.cast(Float64).__rfloordiv__(other)
 
     def __rfloordiv__(self, other: Any) -> Series:
@@ -528,6 +591,22 @@ class Series:
                 "first cast to integer before raising datelike dtypes to a power"
             )
         return self.to_frame().select(other ** pli.col(self.name)).to_series()
+
+    def __matmul__(self, other: Any) -> float | Series | None:
+        if isinstance(other, Sequence) or (
+            _NUMPY_TYPE(other) and isinstance(other, np.ndarray)
+        ):
+            other = Series(other)
+        # elif isinstance(other, pli.DataFrame):
+        #     return other.__rmatmul__(self)  # type: ignore[return-value]
+        return self.dot(other)
+
+    def __rmatmul__(self, other: Any) -> float | Series | None:
+        if isinstance(other, Sequence) or (
+            _NUMPY_TYPE(other) and isinstance(other, np.ndarray)
+        ):
+            other = Series(other)
+        return other.dot(self)
 
     def __neg__(self) -> Series:
         return 0 - self
@@ -2974,7 +3053,7 @@ class Series:
 
         """
 
-    def dot(self, other: Series) -> float | None:
+    def dot(self, other: Series | ArrayLike) -> float | None:
         """
         Compute the dot/inner product between two Series.
 
@@ -2988,9 +3067,14 @@ class Series:
         Parameters
         ----------
         other
-            Series to compute dot product with
+            Series (or array) to compute dot product with.
 
         """
+        if not isinstance(other, Series):
+            other = Series(other)
+        if len(self) != len(other):
+            n, m = len(self), len(other)
+            raise ShapeError(f"Series length mismatch: expected {n}, found {m}")
         return self._s.dot(other._s)
 
     def mode(self) -> Series:

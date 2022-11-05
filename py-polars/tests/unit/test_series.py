@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from datetime import date, datetime, time, timedelta
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Iterator, cast
 
 import numpy as np
 import pandas as pd
@@ -17,10 +17,14 @@ from polars.datatypes import (
     Float64,
     Int32,
     Int64,
+    PolarsDataType,
     Time,
     UInt32,
     UInt64,
 )
+from polars.exceptions import ShapeError
+from polars.internals.construction import iterable_to_pyseries
+from polars.internals.type_aliases import EpochTimeUnit
 from polars.testing import assert_frame_equal, assert_series_equal
 from polars.testing._private import verify_series_and_expr_api
 
@@ -267,9 +271,10 @@ def test_arithmetic(s: pl.Series) -> None:
     assert ((a / 1) == [1.0, 2.0]).sum() == 2
     assert ((a // 2) == [0, 1]).sum() == 2
     assert ((a * 2) == [2, 4]).sum() == 2
-    assert ((1 + a) == [2, 3]).sum() == 2
+    assert ((2 + a) == [3, 4]).sum() == 2
     assert ((1 - a) == [0, -1]).sum() == 2
-    assert ((1 * a) == [1, 2]).sum() == 2
+    assert ((2 * a) == [2, 4]).sum() == 2
+
     # integer division
     assert_series_equal(1 / a, pl.Series([1.0, 0.5]))
     if s.dtype == Int64:
@@ -341,6 +346,9 @@ def test_add_string() -> None:
     s = pl.Series(["hello", "weird"])
     result = s + " world"
     assert_series_equal(result, pl.Series(["hello world", "weird world"]))
+
+    result = "pfx:" + s
+    assert_series_equal(result, pl.Series(["pfx:hello", "pfx:weird"]))
 
 
 def test_append_extend() -> None:
@@ -1373,6 +1381,46 @@ def test_to_numpy(monkeypatch: Any) -> None:
                 assert np_array_with_missing_values.flags.writeable == writable
 
 
+def test_from_generator_or_iterable() -> None:
+    # generator function
+    def gen(n: int) -> Iterator[int]:
+        yield from range(n)
+
+    # iterable object
+    class Data:
+        def __init__(self, n: int):
+            self._n = n
+
+        def __iter__(self) -> Iterator[int]:
+            yield from gen(self._n)
+
+    expected = pl.Series("s", range(10))
+    assert expected.dtype == pl.Int64
+
+    for generated_series in (
+        pl.Series("s", values=gen(10)),
+        pl.Series("s", values=Data(10)),
+        pl.Series("s", values=(x for x in gen(10))),
+    ):
+        assert_series_equal(expected, generated_series)
+
+    # test 'iterable_to_pyseries' directly to validate 'chunk_size' behaviour
+    ps1 = iterable_to_pyseries("s", gen(10), dtype=pl.UInt8)
+    ps2 = iterable_to_pyseries("s", gen(10), dtype=pl.UInt8, chunk_size=3)
+    ps3 = iterable_to_pyseries("s", Data(10), dtype=pl.UInt8, chunk_size=6)
+
+    expected = pl.Series("s", range(10), dtype=pl.UInt8)
+    assert expected.dtype == pl.UInt8
+
+    for ps in (ps1, ps2, ps3):
+        generated_series = pl.Series("s")
+        generated_series._s = ps
+        assert_series_equal(expected, generated_series)
+
+    # empty generator
+    assert_series_equal(pl.Series("s", []), pl.Series("s", values=gen(0)))
+
+
 def test_from_sequences(monkeypatch: Any) -> None:
     # test int, str, bool, flt
     values = [
@@ -1566,9 +1614,21 @@ def test_is_duplicated() -> None:
 
 
 def test_dot() -> None:
-    s = pl.Series("a", [1, 2, 3])
+    s1 = pl.Series("a", [1, 2, 3])
     s2 = pl.Series("b", [4.0, 5.0, 6.0])
-    assert s.dot(s2) == 32
+
+    assert np.array([1, 2, 3]) @ np.array([4, 5, 6]) == 32
+
+    for dot_result in (
+        s1.dot(s2),
+        s1 @ s2,
+        [1, 2, 3] @ s2,
+        s1 @ np.array([4, 5, 6]),
+    ):
+        assert dot_result == 32
+
+    with pytest.raises(ShapeError, match="length mismatch"):
+        s1 @ [4, 5, 6, 7, 8]
 
 
 def test_sample() -> None:
@@ -2310,3 +2370,33 @@ def test_repr() -> None:
 def test_builtin_abs() -> None:
     s = pl.Series("s", [-1, 0, 1, None])
     assert abs(s).to_list() == [1, 0, 1, None]
+
+
+@pytest.mark.parametrize(
+    "value, unit, exp, exp_type",
+    [
+        (13285, "d", date(2006, 5, 17), pl.Date),
+        (1147880044, "s", datetime(2006, 5, 17, 15, 34, 4), pl.Datetime),
+        (1147880044 * 1_000, "ms", datetime(2006, 5, 17, 15, 34, 4), pl.Datetime("ms")),
+        (
+            1147880044 * 1_000_000,
+            "us",
+            datetime(2006, 5, 17, 15, 34, 4),
+            pl.Datetime("us"),
+        ),
+        (
+            1147880044 * 1_000_000_000,
+            "ns",
+            datetime(2006, 5, 17, 15, 34, 4),
+            pl.Datetime("ns"),
+        ),
+    ],
+)
+def test_from_epoch_expr(
+    value: int, unit: EpochTimeUnit, exp: date | datetime, exp_type: PolarsDataType
+) -> None:
+    s = pl.Series("timestamp", [value, None])
+    result = pl.from_epoch(s, unit=unit)
+
+    expected = pl.Series("timestamp", [exp, None]).cast(exp_type)
+    assert_series_equal(result, expected)

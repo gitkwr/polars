@@ -7,10 +7,12 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence, cast, overload
 
 from polars import internals as pli
 from polars.datatypes import (
+    DTYPE_TEMPORAL_UNITS,
     DataType,
     Date,
     Datetime,
     Duration,
+    Int64,
     PolarsDataType,
     Time,
     UInt32,
@@ -19,6 +21,7 @@ from polars.datatypes import (
 )
 from polars.dependencies import _NUMPY_TYPE
 from polars.dependencies import numpy as np
+from polars.internals.type_aliases import EpochTimeUnit
 from polars.utils import (
     _datetime_to_pl_timestamp,
     _time_to_pl_time,
@@ -1337,6 +1340,7 @@ def arange(
     step: int = ...,
     *,
     eager: Literal[True],
+    dtype: PolarsDataType | None = ...,
 ) -> pli.Series:
     ...
 
@@ -1348,6 +1352,7 @@ def arange(
     step: int = ...,
     *,
     eager: bool = False,
+    dtype: PolarsDataType | None = ...,
 ) -> pli.Expr | pli.Series:
     ...
 
@@ -1358,13 +1363,13 @@ def arange(
     step: int = 1,
     *,
     eager: bool = False,
+    dtype: PolarsDataType | None = None,
 ) -> pli.Expr | pli.Series:
     """
-    Create a range expression.
+    Create a range expression (or Series).
 
-    This can be used in a `select`, `with_column` etc.
-
-    Be sure that the range size is equal to the DataFrame you are collecting.
+    This can be used in a `select`, `with_column` etc. Be sure that the resulting
+    range size is equal to the length of the DataFrame you are collecting.
 
     Examples
     --------
@@ -1380,16 +1385,25 @@ def arange(
         Step size of the range.
     eager
         If eager evaluation is `True`, a Series is returned instead of an Expr.
+    dtype
+        Apply an explicit integer dtype to the resulting expression (default is Int64).
 
     """
     low = pli.expr_to_lit_or_expr(low, str_to_lit=False)
     high = pli.expr_to_lit_or_expr(high, str_to_lit=False)
+    range_expr = pli.wrap_expr(pyarange(low._pyexpr, high._pyexpr, step))
 
-    if eager:
-        df = pli.DataFrame({"a": [1]})
-        return df.select(arange(low, high, step).alias("arange"))["arange"]
-
-    return pli.wrap_expr(pyarange(low._pyexpr, high._pyexpr, step))
+    if dtype is not None and dtype != Int64:
+        range_expr = range_expr.cast(dtype)
+    if not eager:
+        return range_expr
+    else:
+        return (
+            pli.DataFrame()
+            .select(range_expr)
+            .to_series()
+            .rename("arange", in_place=True)
+        )
 
 
 def argsort_by(
@@ -2119,3 +2133,122 @@ def coalesce(
     """
     exprs = pli.selection_to_pyexpr_list(exprs)
     return pli.wrap_expr(_coalesce_exprs(exprs))
+
+
+@overload
+def from_epoch(
+    column: str | pli.Expr | pli.Series,
+    unit: EpochTimeUnit = ...,
+    *,
+    eager: Literal[False],
+) -> pli.Expr:
+    ...
+
+
+@overload
+def from_epoch(
+    column: str | pli.Expr | pli.Series | Sequence[int],
+    unit: EpochTimeUnit = ...,
+    *,
+    eager: Literal[True],
+) -> pli.Series:
+    ...
+
+
+@overload
+def from_epoch(
+    column: pli.Series | Sequence[int],
+    unit: EpochTimeUnit = ...,
+    *,
+    eager: Literal[True] = ...,
+) -> pli.Series:
+    ...
+
+
+@overload
+def from_epoch(
+    column: str | pli.Expr,
+    unit: EpochTimeUnit = ...,
+    *,
+    eager: Literal[False] = ...,
+) -> pli.Expr:
+    ...
+
+
+@overload
+def from_epoch(
+    column: str | pli.Expr | pli.Series | Sequence[int],
+    unit: EpochTimeUnit = ...,
+    *,
+    eager: bool = ...,
+) -> pli.Expr | pli.Series:
+    ...
+
+
+def from_epoch(
+    column: str | pli.Expr | pli.Series | Sequence[int],
+    unit: EpochTimeUnit = "s",
+    *,
+    eager: bool = False,
+) -> pli.Expr | pli.Series:
+    """
+    Utility function that parses an epoch timestamp (or Unix time) to Polars Date(time).
+
+    Depending on the `unit` provided, this function will return a different dtype:
+    - unit="d" returns pl.Date
+    - unit="s" returns pl.Datetime["us"] (pl.Datetime's default)
+    - unit="ms" returns pl.Datetime["ms"]
+    - unit="us" returns pl.Datetime["us"]
+    - unit="ns" returns pl.Datetime["ns"]
+
+    Parameters
+    ----------
+    column
+        Series or expression to parse integers to pl.Datetime.
+    unit
+        The unit of the timesteps since epoch time.
+    eager
+        If eager evaluation is `True`, a Series is returned instead of an Expr.
+
+    Examples
+    --------
+    >>> df = pl.DataFrame({"timestamp": [1666683077, 1666683099]}).lazy()
+    >>> df.select(pl.from_epoch(pl.col("timestamp"), unit="s")).collect()
+    shape: (2, 1)
+    ┌─────────────────────┐
+    │ timestamp           │
+    │ ---                 │
+    │ datetime[μs]        │
+    ╞═════════════════════╡
+    │ 2022-10-25 07:31:17 │
+    ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+    │ 2022-10-25 07:31:39 │
+    └─────────────────────┘
+
+    """
+    if isinstance(column, str):
+        column = col(column)
+    elif not isinstance(column, (pli.Series, pli.Expr)):
+        column = pli.Series(column)  # Sequence input handled by Series constructor
+
+    if unit == "d":
+        expr = column.cast(Date)
+    elif unit == "s":
+        expr = (column.cast(Int64) * 1_000_000).cast(Datetime("us"))
+    elif unit in DTYPE_TEMPORAL_UNITS:
+        expr = column.cast(Datetime(unit))
+    else:
+        raise ValueError(
+            f"'unit' must be one of {{'ns', 'us', 'ms', 's', 'd'}}, got '{unit}'."
+        )
+
+    if eager:
+        if not isinstance(column, pli.Series):
+            raise ValueError(
+                "expected 'Series or Sequence' in 'from_epoch' if 'eager=True', got"
+                f" {type(column)}"
+            )
+        else:
+            return column.to_frame().select(expr).to_series()
+    else:
+        return expr
