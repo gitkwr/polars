@@ -24,7 +24,10 @@ impl OrderedSink {
 
 impl Sink for OrderedSink {
     fn sink(&mut self, _context: &PExecutionContext, chunk: DataChunk) -> PolarsResult<SinkResult> {
-        self.chunks.push(chunk);
+        // don't add empty dataframes
+        if chunk.data.height() > 0 || self.chunks.is_empty() {
+            self.chunks.push(chunk);
+        }
         Ok(SinkResult::CanHaveMoreInput)
     }
 
@@ -37,7 +40,7 @@ impl Sink for OrderedSink {
     fn split(&self, _thread_no: usize) -> Box<dyn Sink> {
         Box::new(self.clone())
     }
-    fn finalize(&mut self) -> PolarsResult<FinalizedSink> {
+    fn finalize(&mut self, _context: &PExecutionContext) -> PolarsResult<FinalizedSink> {
         self.sort();
         let chunks = std::mem::take(&mut self.chunks);
         Ok(FinalizedSink::Finished(chunks_to_df_unchecked(chunks)))

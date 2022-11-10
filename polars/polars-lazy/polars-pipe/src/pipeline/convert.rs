@@ -61,7 +61,7 @@ where
         #[cfg(feature = "csv-file")]
         CsvScan {
             path,
-            schema,
+            file_info,
             options,
             predicate,
             ..
@@ -73,13 +73,13 @@ where
                 let op = Box::new(op) as Box<dyn Operator>;
                 operator_objects.push(op)
             }
-            let src = sources::CsvSource::new(path, schema, options)?;
+            let src = sources::CsvSource::new(path, file_info.schema, options)?;
             Ok(Box::new(src) as Box<dyn Source>)
         }
         #[cfg(feature = "parquet")]
         ParquetScan {
             path,
-            schema,
+            file_info,
             options,
             predicate,
             ..
@@ -91,7 +91,7 @@ where
                 let op = Box::new(op) as Box<dyn Operator>;
                 operator_objects.push(op)
             }
-            let src = sources::ParquetSource::new(path, options, &schema)?;
+            let src = sources::ParquetSource::new(path, options, &file_info.schema)?;
             Ok(Box::new(src) as Box<dyn Source>)
         }
         _ => todo!(),
@@ -103,17 +103,42 @@ pub fn get_sink<F>(
     lp_arena: &mut Arena<ALogicalPlan>,
     expr_arena: &mut Arena<AExpr>,
     to_physical: &F,
-) -> Box<dyn Sink>
+) -> PolarsResult<Box<dyn Sink>>
 where
     F: Fn(Node, &Arena<AExpr>) -> PolarsResult<Arc<dyn PhysicalPipedExpr>>,
 {
     use ALogicalPlan::*;
-    match lp_arena.get(node) {
-        #[cfg(feature = "cross_join")]
-        Join { options, .. } => match options.how {
+    let out = match lp_arena.get(node) {
+        Join {
+            options,
+            left_on,
+            right_on,
+            ..
+        } => match &options.how {
+            #[cfg(feature = "cross_join")]
             JoinType::Cross => Box::new(CrossJoin::new(options.suffix.clone())) as Box<dyn Sink>,
+            join_type @ JoinType::Inner | join_type @ JoinType::Left => {
+                let join_columns_left =
+                    Arc::new(exprs_to_physical(left_on, expr_arena, to_physical)?);
+                let join_columns_right =
+                    Arc::new(exprs_to_physical(right_on, expr_arena, to_physical)?);
+
+                let swapped = swap_join_order(options);
+
+                Box::new(GenericBuild::new(
+                    Arc::from(options.suffix.as_ref()),
+                    join_type.clone(),
+                    swapped,
+                    join_columns_left,
+                    join_columns_right,
+                ))
+            }
             _ => unimplemented!(),
         },
+        Slice { offset, len, .. } => {
+            let slice = SliceSink::new(*offset as u64, *len as usize);
+            Box::new(slice) as Box<dyn Sink>
+        }
         Aggregate {
             input,
             keys,
@@ -122,11 +147,7 @@ where
             options,
             ..
         } => {
-            let key_columns = Arc::new(
-                keys.iter()
-                    .map(|node| to_physical(*node, expr_arena).unwrap())
-                    .collect::<Vec<_>>(),
-            );
+            let key_columns = Arc::new(exprs_to_physical(keys, expr_arena, to_physical)?);
 
             let mut aggregation_columns = Vec::with_capacity(aggs.len());
             let mut agg_fns = Vec::with_capacity(aggs.len());
@@ -165,10 +186,11 @@ where
                 )) as Box<dyn Sink>,
             }
         }
-        _ => {
-            todo!()
+        lp => {
+            panic!("{:?} not implemented", lp)
         }
-    }
+    };
+    Ok(out)
 }
 
 pub fn get_dummy_operator() -> Box<dyn Operator> {
@@ -288,7 +310,7 @@ where
     }
     let sink = sink_node
         .map(|node| get_sink(node, lp_arena, expr_arena, &to_physical))
-        .unwrap_or_else(|| Box::new(OrderedSink::new()));
+        .unwrap_or_else(|| Ok(Box::new(OrderedSink::new())))?;
 
     // this offset is because the source might have inserted operators
     let operator_offset = operator_objects.len();
@@ -302,4 +324,11 @@ where
         sink_node,
         operator_offset,
     ))
+}
+
+pub fn swap_join_order(options: &JoinOptions) -> bool {
+    match (options.rows_left, options.rows_right) {
+        ((Some(left), _), (Some(right), _)) => left > right,
+        ((_, left), (_, right)) => left > right,
+    }
 }

@@ -10,7 +10,7 @@ pub(super) mod sort_merge;
 
 #[cfg(feature = "chunked_ids")]
 use std::borrow::Cow;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
 
 use ahash::RandomState;
@@ -65,6 +65,7 @@ pub type JoinOptIds = Vec<Option<IdxSize>>;
 #[cfg(not(feature = "chunked_ids"))]
 pub type JoinIds = Vec<IdxSize>;
 
+/// [ChunkIdx, DfIdx]
 pub type ChunkId = [IdxSize; 2];
 
 pub fn default_join_ids() -> JoinOptIds {
@@ -118,7 +119,7 @@ pub(crate) fn check_categorical_src(l: &DataType, r: &DataType) -> PolarsResult<
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum JoinType {
     Left,
@@ -131,6 +132,31 @@ pub enum JoinType {
     Semi,
     #[cfg(feature = "semi_anti_join")]
     Anti,
+}
+
+impl Display for JoinType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        use JoinType::*;
+        let val = match self {
+            Left => "LEFT",
+            Inner => "INNER",
+            Outer => "OUTER",
+            #[cfg(feature = "asof_join")]
+            AsOf(_) => "ASOF",
+            Cross => "CROSS",
+            #[cfg(feature = "semi_anti_join")]
+            Semi => "SEMI",
+            #[cfg(feature = "semi_anti_join")]
+            Anti => "ANTI",
+        };
+        write!(f, "{}", val)
+    }
+}
+
+impl Debug for JoinType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
 }
 
 pub(crate) unsafe fn get_hash_tbl_threaded_join_partitioned<Item>(
@@ -268,38 +294,38 @@ impl ZipOuterJoinColumn for Float64Chunked {
     }
 }
 
-impl DataFrame {
-    /// Utility method to finish a join.
-    pub(crate) fn finish_join(
-        &self,
-        mut df_left: DataFrame,
-        mut df_right: DataFrame,
-        suffix: Option<&str>,
-    ) -> PolarsResult<DataFrame> {
-        let mut left_names = PlHashSet::with_capacity(df_left.width());
+/// Utility method to finish a join.
+#[doc(hidden)]
+pub fn _finish_join(
+    mut df_left: DataFrame,
+    mut df_right: DataFrame,
+    suffix: Option<&str>,
+) -> PolarsResult<DataFrame> {
+    let mut left_names = PlHashSet::with_capacity(df_left.width());
 
-        df_left.columns.iter().for_each(|series| {
-            left_names.insert(series.name());
-        });
+    df_left.columns.iter().for_each(|series| {
+        left_names.insert(series.name());
+    });
 
-        let mut rename_strs = Vec::with_capacity(df_right.width());
+    let mut rename_strs = Vec::with_capacity(df_right.width());
 
-        df_right.columns.iter().for_each(|series| {
-            if left_names.contains(series.name()) {
-                rename_strs.push(series.name().to_owned())
-            }
-        });
-        let suffix = suffix.unwrap_or("_right");
-
-        for name in rename_strs {
-            df_right.rename(&name, &format!("{}{}", name, suffix))?;
+    df_right.columns.iter().for_each(|series| {
+        if left_names.contains(series.name()) {
+            rename_strs.push(series.name().to_owned())
         }
+    });
+    let suffix = suffix.unwrap_or("_right");
 
-        drop(left_names);
-        df_left.hstack_mut(&df_right.columns)?;
-        Ok(df_left)
+    for name in rename_strs {
+        df_right.rename(&name, &format!("{}{}", name, suffix))?;
     }
 
+    drop(left_names);
+    df_left.hstack_mut(&df_right.columns)?;
+    Ok(df_left)
+}
+
+impl DataFrame {
     /// # Safety
     /// Join tuples must be in bounds
     #[cfg(feature = "chunked_ids")]
@@ -517,7 +543,7 @@ impl DataFrame {
                             ._take_unchecked_slice(join_idx_right, true)
                     },
                 );
-                self.finish_join(df_left, df_right, suffix.as_deref())
+                _finish_join(df_left, df_right, suffix.as_deref())
             }
             JoinType::Left => {
                 let mut left = DataFrame::new_no_checks(selected_left_physical);
@@ -565,7 +591,7 @@ impl DataFrame {
                 }
                 keys.extend_from_slice(df_left.get_columns());
                 let df_left = DataFrame::new_no_checks(keys);
-                self.finish_join(df_left, df_right, suffix.as_deref())
+                _finish_join(df_left, df_right, suffix.as_deref())
             }
             #[cfg(feature = "asof_join")]
             JoinType::AsOf(_) => Err(PolarsError::ComputeError(
@@ -709,7 +735,7 @@ impl DataFrame {
                     ._take_unchecked_slice(join_tuples_right, true)
             },
         );
-        self.finish_join(df_left, df_right, suffix.as_deref())
+        _finish_join(df_left, df_right, suffix.as_deref())
     }
 
     /// Perform a left join on two DataFrames
@@ -789,7 +815,7 @@ impl DataFrame {
         };
         let (df_left, df_right) = POOL.join(materialize_left, materialize_right);
 
-        self.finish_join(df_left, df_right, suffix.as_deref())
+        _finish_join(df_left, df_right, suffix.as_deref())
     }
 
     #[cfg(feature = "chunked_ids")]
@@ -840,7 +866,7 @@ impl DataFrame {
         };
         let (df_left, df_right) = POOL.join(materialize_left, materialize_right);
 
-        self.finish_join(df_left, df_right, suffix.as_deref())
+        _finish_join(df_left, df_right, suffix.as_deref())
     }
 
     pub(crate) fn left_join_from_series(
@@ -976,7 +1002,7 @@ impl DataFrame {
         };
 
         df_left.get_columns_mut().insert(join_column_index, s);
-        self.finish_join(df_left, df_right, suffix.as_deref())
+        _finish_join(df_left, df_right, suffix.as_deref())
     }
 }
 

@@ -6,6 +6,7 @@ This page gives an overview of all public Series methods.
 
 .. toctree::
    :maxdepth: 2
+   :hidden:
 
    aggregation
    array
@@ -13,10 +14,18 @@ This page gives an overview of all public Series methods.
    boolean
    categories
    computation
-   conversion
    descriptive
+   export
    modify_select
    miscellaneous
    strings
    struct
    timeseries
+
+.. currentmodule:: polars
+
+.. autoclass:: Series
+    :members:
+    :noindex:
+    :autosummary:
+    :autosummary-nosignatures:

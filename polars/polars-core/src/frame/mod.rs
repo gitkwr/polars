@@ -1070,6 +1070,21 @@ impl DataFrame {
         Ok(DataFrame::new_no_checks(new_cols))
     }
 
+    pub fn drop_many<S: AsRef<str>>(&self, names: &[S]) -> Self {
+        let names = names.iter().map(|s| s.as_ref()).collect();
+        fn inner(df: &DataFrame, names: Vec<&str>) -> DataFrame {
+            let mut new_cols = Vec::with_capacity(df.columns.len() - names.len());
+            df.columns.iter().for_each(|s| {
+                if !names.contains(&s.name()) {
+                    new_cols.push(s.clone())
+                }
+            });
+
+            DataFrame::new_no_checks(new_cols)
+        }
+        inner(self, names)
+    }
+
     fn insert_at_idx_no_name_check(
         &mut self,
         index: usize,
@@ -3111,6 +3126,32 @@ impl DataFrame {
             .iter()
             .map(|s| Ok(s.dtype().clone()))
             .reduce(|acc, b| try_get_supertype(&acc?, &b.unwrap()))
+    }
+
+    #[cfg(feature = "chunked_ids")]
+    #[doc(hidden)]
+    //// Take elements by a slice of [`ChunkId`]s.
+    /// # Safety
+    /// Does not do any bound checks.
+    /// `sorted` indicates if the chunks are sorted.
+    #[doc(hidden)]
+    pub unsafe fn _take_chunked_unchecked_seq(&self, idx: &[ChunkId], sorted: IsSorted) -> Self {
+        let cols = self.apply_columns(&|s| s._take_chunked_unchecked(idx, sorted));
+
+        DataFrame::new_no_checks(cols)
+    }
+    #[cfg(feature = "chunked_ids")]
+    //// Take elements by a slice of optional [`ChunkId`]s.
+    /// # Safety
+    /// Does not do any bound checks.
+    #[doc(hidden)]
+    pub unsafe fn _take_opt_chunked_unchecked_seq(&self, idx: &[Option<ChunkId>]) -> Self {
+        let cols = self.apply_columns(&|s| match s.dtype() {
+            DataType::Utf8 => s._take_opt_chunked_unchecked_threaded(idx, true),
+            _ => s._take_opt_chunked_unchecked(idx),
+        });
+
+        DataFrame::new_no_checks(cols)
     }
 
     #[cfg(feature = "chunked_ids")]
