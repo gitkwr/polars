@@ -7,7 +7,7 @@ import sys
 import warnings
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence, TypeVar, overload
 
 import polars.internals as pli
 from polars.datatypes import DataType, Date, Datetime, PolarsDataType, is_polars_dtype
@@ -40,8 +40,25 @@ def _process_null_values(
         return null_values
 
 
-def _timedelta_to_pl_duration(td: timedelta) -> str:
-    return f"{td.days}d{td.seconds}s{td.microseconds}us"
+@overload
+def _timedelta_to_pl_duration(td: None) -> None:
+    ...
+
+
+@overload
+def _timedelta_to_pl_duration(td: timedelta | str) -> str:
+    ...
+
+
+def _timedelta_to_pl_duration(td: timedelta | str | None) -> str | None:
+    """Convert python timedelta to a polars duration string."""
+    if td is None or isinstance(td, str):
+        return td
+    else:
+        d = td.days and f"{td.days}d" or ""
+        s = td.seconds and f"{td.seconds}s" or ""
+        us = td.microseconds and f"{td.microseconds}us" or ""
+        return f"{d}{s}{us}"
 
 
 def _datetime_to_pl_timestamp(dt: datetime, tu: TimeUnit | None) -> int:
@@ -323,20 +340,20 @@ def _rename_kwargs(
             kwargs[new] = kwargs.pop(alias)
 
 
-class accessor:
-    """Property decorator for namespaces (can act on both instances AND classes)."""
+if not os.getenv("BUILDING_SPHINX_DOCS"):
+    # if NOT building docs we use a simple @property decorator for namespace accessors,
+    # which plays much better with mypy, pylint, and the various IDEs' autocomplete.
+    accessor = property
+else:
+    # however, when building docs (with Sphinx) we need access to the functions
+    # associated with the namespaces from the class, as we don't have an instance.
+    NS = TypeVar("NS")
 
-    def __init__(self, method: Callable[..., Any] | None = None) -> None:
-        self.fget = method
-
-    def __get__(self, instance: Any, cls: type | None = None) -> Any:
-        return self.fget(  # type: ignore[misc]
-            instance if isinstance(instance, cls) else cls  # type: ignore[arg-type]
-        )
-
-    def getter(self, method: Callable[..., Any] | None) -> Any:
-        self.fget = method
-        return self
+    class accessor(property):  # type: ignore[no-redef]
+        def __get__(self, instance: Any, cls: type[NS]) -> NS:  # type: ignore[override]
+            return self.fget(  # type: ignore[misc]
+                instance if isinstance(instance, cls) else cls
+            )
 
 
 def scale_bytes(sz: int, to: SizeUnit) -> int | float:
