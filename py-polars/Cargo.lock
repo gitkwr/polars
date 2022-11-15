@@ -1598,6 +1598,7 @@ dependencies = [
 name = "polars-sql"
 version = "0.2.1"
 dependencies = [
+ "jemallocator",
  "polars-arrow",
  "polars-core",
  "polars-lazy",
@@ -1644,7 +1645,7 @@ dependencies = [
 
 [[package]]
 name = "py-polars"
-version = "0.14.27"
+version = "0.14.28"
 dependencies = [
  "ahash 0.8.1",
  "bincode",
