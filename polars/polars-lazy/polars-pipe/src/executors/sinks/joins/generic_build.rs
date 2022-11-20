@@ -131,6 +131,14 @@ pub(super) fn compare_fn(
 }
 
 impl GenericBuild {
+    fn is_empty(&self) -> bool {
+        match self.chunks.len() {
+            0 => true,
+            1 => self.chunks[0].data.height() == 0,
+            _ => false,
+        }
+    }
+
     #[inline]
     fn number_of_keys(&self) -> usize {
         self.join_columns_left.len()
@@ -175,7 +183,17 @@ impl GenericBuild {
 
 impl Sink for GenericBuild {
     fn sink(&mut self, context: &PExecutionContext, chunk: DataChunk) -> PolarsResult<SinkResult> {
+        // we do some juggling here so that we don't
+        // end up with empty chunks
+        // But we always want one empty chunk if all is empty as we need
+        // to finish the join
+        if self.chunks.len() == 1 && self.chunks[0].data.height() == 0 {
+            self.chunks.pop().unwrap();
+        }
         if chunk.is_empty() {
+            if self.chunks.is_empty() {
+                self.chunks.push(chunk)
+            }
             return Ok(SinkResult::CanHaveMoreInput);
         }
         let mut hashes = std::mem::take(&mut self.hashes);
@@ -225,7 +243,15 @@ impl Sink for GenericBuild {
     }
 
     fn combine(&mut self, mut other: Box<dyn Sink>) {
+        if self.is_empty() {
+            let other = other.as_any().downcast_mut::<Self>().unwrap();
+            std::mem::swap(self, other);
+            return;
+        }
         let other = other.as_any().downcast_ref::<Self>().unwrap();
+        if other.is_empty() {
+            return;
+        }
         let mut tuple_buf = Vec::with_capacity(self.number_of_keys());
 
         let chunks_offset = self.chunks.len() as IdxSize;
@@ -235,47 +261,50 @@ impl Sink for GenericBuild {
 
         // we combine the other hashtable with ours, but we must offset the chunk_idx
         // values by the number of chunks we already got.
-        for (ht, other_ht) in self.hash_tables.iter_mut().zip(&other.hash_tables) {
-            for (k, val) in other_ht.iter() {
-                // use the indexes to materialize the row
-                for [chunk_idx, df_idx] in val {
-                    unsafe { other.get_tuple(*chunk_idx, *df_idx, &mut tuple_buf) };
-                }
+        self.hash_tables
+            .iter_mut()
+            .zip(&other.hash_tables)
+            .for_each(|(ht, other_ht)| {
+                for (k, val) in other_ht.iter() {
+                    // use the indexes to materialize the row
+                    for [chunk_idx, df_idx] in val {
+                        unsafe { other.get_tuple(*chunk_idx, *df_idx, &mut tuple_buf) };
+                    }
 
-                let h = k.hash;
-                let entry = ht.raw_entry_mut().from_hash(h, |key| {
-                    compare_fn(
-                        key,
-                        h,
-                        &self.materialized_join_cols,
-                        &tuple_buf,
-                        tuple_buf.len(),
-                    )
-                });
+                    let h = k.hash;
+                    let entry = ht.raw_entry_mut().from_hash(h, |key| {
+                        compare_fn(
+                            key,
+                            h,
+                            &self.materialized_join_cols,
+                            &tuple_buf,
+                            tuple_buf.len(),
+                        )
+                    });
 
-                match entry {
-                    RawEntryMut::Vacant(entry) => {
-                        let [chunk_idx, df_idx] = unsafe { val.get_unchecked_release(0) };
-                        let new_chunk_idx = chunk_idx + chunks_offset;
-                        let key = Key::new(h, new_chunk_idx, *df_idx);
-                        let mut payload = vec![[new_chunk_idx, *df_idx]];
-                        if val.len() > 1 {
-                            let iter = val[1..]
+                    match entry {
+                        RawEntryMut::Vacant(entry) => {
+                            let [chunk_idx, df_idx] = unsafe { val.get_unchecked_release(0) };
+                            let new_chunk_idx = chunk_idx + chunks_offset;
+                            let key = Key::new(h, new_chunk_idx, *df_idx);
+                            let mut payload = vec![[new_chunk_idx, *df_idx]];
+                            if val.len() > 1 {
+                                let iter = val[1..].iter().map(|[chunk_idx, val_idx]| {
+                                    [*chunk_idx + chunks_offset, *val_idx]
+                                });
+                                payload.extend(iter);
+                            }
+                            entry.insert(key, payload);
+                        }
+                        RawEntryMut::Occupied(mut entry) => {
+                            let iter = val
                                 .iter()
                                 .map(|[chunk_idx, val_idx]| [*chunk_idx + chunks_offset, *val_idx]);
-                            payload.extend(iter);
+                            entry.get_mut().extend(iter);
                         }
-                        entry.insert(key, payload);
-                    }
-                    RawEntryMut::Occupied(mut entry) => {
-                        let iter = val
-                            .iter()
-                            .map(|[chunk_idx, val_idx]| [*chunk_idx + chunks_offset, *val_idx]);
-                        entry.get_mut().extend(iter);
                     }
                 }
-            }
-        }
+            })
     }
 
     fn split(&self, _thread_no: usize) -> Box<dyn Sink> {
@@ -300,7 +329,9 @@ impl Sink for GenericBuild {
                         .map(|chunk| chunk.data),
                 );
                 if let Ok(n_chunks) = left_df.n_chunks() {
-                    assert_eq!(n_chunks, chunks_len);
+                    if left_df.height() > 0 {
+                        assert_eq!(n_chunks, chunks_len);
+                    }
                 }
                 let materialized_join_cols =
                     Arc::new(std::mem::take(&mut self.materialized_join_cols));

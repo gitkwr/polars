@@ -1452,6 +1452,7 @@ dependencies = [
  "polars-ops",
  "polars-sql",
  "polars-time",
+ "version_check",
 ]
 
 [[package]]
@@ -1467,6 +1468,8 @@ name = "polars-arrow"
 version = "0.25.1"
 dependencies = [
  "arrow2",
+ "chrono",
+ "chrono-tz",
  "hashbrown",
  "num",
  "serde",
@@ -1575,6 +1578,7 @@ dependencies = [
  "polars-plan",
  "polars-utils",
  "rayon",
+ "smartstring",
 ]
 
 [[package]]
@@ -1645,7 +1649,7 @@ dependencies = [
 
 [[package]]
 name = "py-polars"
-version = "0.14.28"
+version = "0.14.29"
 dependencies = [
  "ahash 0.8.1",
  "bincode",

@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import os
 import sys
+import typing
 from collections.abc import Sized
 from datetime import timedelta
 from io import BytesIO, IOBase, StringIO
@@ -254,6 +255,8 @@ class DataFrame:
     False
 
     """
+
+    _accessors: set[str] = set()
 
     def __init__(
         self,
@@ -2992,16 +2995,23 @@ class DataFrame:
 
     def pipe(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """
-        Apply a function on Self.
+        Offers a structured way to apply a sequence of user-defined functions (UDFs).
 
         Parameters
         ----------
         func
-            Callable.
+            Callable; will receive the frame as the first parameter,
+            followed by any given args/kwargs.
         args
-            Arguments.
+            Arguments to pass to the UDF.
         kwargs
-            Keyword arguments.
+            Keyword arguments to pass to the UDF.
+
+        Notes
+        -----
+        It is recommended to use LazyFrame when piping operations, in order
+        to fully take advantage of query optimization and parallelization.
+        See :meth:`df.lazy() <polars.DataFrame.lazy>`.
 
         Examples
         --------
@@ -6628,6 +6638,28 @@ class DataFrame:
         if isinstance(names, str):
             names = [names]
         return self._from_pydf(self._df.unnest(names))
+
+    @typing.no_type_check
+    def pearson_corr(self, **kwargs: dict[str, Any]) -> DataFrame:
+        """
+        Return Pearson product-moment correlation coefficients.
+
+        See numpy corrcoef for more information.
+
+        Notes
+        -----
+        This functionality requires numpy to be installed.
+
+        Parameters
+        ----------
+        kwargs
+            keyword arguments are passed to numpy corrcoef
+
+        """
+        return DataFrame(
+            np.corrcoef(self, **kwargs),
+            columns=self.columns,
+        )
 
 
 def _prepare_other_arg(other: Any) -> pli.Series:
