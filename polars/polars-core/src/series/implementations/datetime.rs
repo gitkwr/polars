@@ -197,14 +197,6 @@ impl SeriesTrait for SeriesWrap<DatetimeChunked> {
         }
     }
 
-    #[cfg(feature = "interpolate")]
-    fn interpolate(&self) -> Series {
-        self.0
-            .interpolate()
-            .into_datetime(self.0.time_unit(), self.0.time_zone().clone())
-            .into_series()
-    }
-
     fn rename(&mut self, name: &str) {
         self.0.rename(name);
     }
@@ -222,10 +214,6 @@ impl SeriesTrait for SeriesWrap<DatetimeChunked> {
 
     fn shrink_to_fit(&mut self) {
         self.0.shrink_to_fit()
-    }
-
-    fn append_array(&mut self, other: ArrayRef) -> PolarsResult<()> {
-        self.0.append_array(other)
     }
 
     fn slice(&self, offset: i64, length: usize) -> Series {

@@ -7,9 +7,9 @@ use polars_core::frame::row::AnyValueBuffer;
 use polars_core::prelude::*;
 use polars_core::utils::{_set_partition_size, accumulate_dataframes_vertical_unchecked};
 use polars_core::POOL;
+use polars_utils::hash_to_partition;
 use polars_utils::slice::GetSaferUnchecked;
 use polars_utils::unwrap::UnwrapUncheckedRelease;
-use polars_utils::{hash_to_partition, HashSingle};
 use rayon::prelude::*;
 
 use super::aggregates::AggregateFn;
@@ -48,6 +48,7 @@ pub struct Utf8GroupbySink {
     // this vec will have two functions. We will use these functions
     // to populate the buffer where the hashmap points to
     agg_fns: Vec<AggregateFunction>,
+    input_schema: SchemaRef,
     output_schema: SchemaRef,
     // amortize allocations
     aggregation_series: Vec<Series>,
@@ -60,6 +61,7 @@ impl Utf8GroupbySink {
         key_column: Arc<dyn PhysicalPipedExpr>,
         aggregation_columns: Arc<Vec<Arc<dyn PhysicalPipedExpr>>>,
         agg_fns: Vec<AggregateFunction>,
+        input_schema: SchemaRef,
         output_schema: SchemaRef,
         slice: Option<(i64, usize)>,
     ) -> Self {
@@ -80,6 +82,7 @@ impl Utf8GroupbySink {
             aggregation_columns,
             hb,
             agg_fns,
+            input_schema,
             output_schema,
             aggregation_series: vec![],
             hashes: vec![],
@@ -166,19 +169,23 @@ impl Utf8GroupbySink {
 
 impl Sink for Utf8GroupbySink {
     fn sink(&mut self, context: &PExecutionContext, chunk: DataChunk) -> PolarsResult<SinkResult> {
+        let state = context.execution_state.as_ref();
+        if !state.input_schema_is_set() {
+            state.set_input_schema(self.input_schema.clone())
+        }
         let num_aggs = self.number_of_aggs();
-        self.hashes.reserve(chunk.data.height());
 
         // todo! amortize allocation
         for phys_e in self.aggregation_columns.iter() {
-            let s = phys_e.evaluate(&chunk, context.execution_state.as_ref())?;
+            let s = phys_e.evaluate(&chunk, context.execution_state.as_any())?;
             let s = s.to_physical_repr();
             self.aggregation_series.push(s.rechunk());
         }
         let s = self
             .key_column
-            .evaluate(&chunk, context.execution_state.as_ref())?;
+            .evaluate(&chunk, context.execution_state.as_any())?;
         let s = s.rechunk();
+        s.vec_hash(self.hb.clone(), &mut self.hashes).unwrap();
         // write the hashes to self.hashes buffer
         // s.vec_hash(self.hb.clone(), &mut self.hashes).unwrap();
         // now we have written hashes, we take the pointer to this buffer
@@ -189,9 +196,7 @@ impl Sink for Utf8GroupbySink {
         // array of the keys
         let keys_arr = s.utf8().unwrap().downcast_iter().next().unwrap().clone();
 
-        for (iteration_idx, key_val) in keys_arr.iter().enumerate() {
-            let h = self.hb.hash_single(key_val);
-
+        for (iteration_idx, (key_val, &h)) in keys_arr.iter().zip(&self.hashes).enumerate() {
             let partition = hash_to_partition(h, self.pre_agg_partitions.len());
             let current_partition =
                 unsafe { self.pre_agg_partitions.get_unchecked_release_mut(partition) };
@@ -334,6 +339,7 @@ impl Sink for Utf8GroupbySink {
             self.key_column.clone(),
             self.aggregation_columns.clone(),
             self.agg_fns.iter().map(|func| func.split2()).collect(),
+            self.input_schema.clone(),
             self.output_schema.clone(),
             self.slice,
         );
@@ -342,7 +348,8 @@ impl Sink for Utf8GroupbySink {
         Box::new(new)
     }
 
-    fn finalize(&mut self, _context: &PExecutionContext) -> PolarsResult<FinalizedSink> {
+    fn finalize(&mut self, context: &PExecutionContext) -> PolarsResult<FinalizedSink> {
+        context.execution_state.clear_input_schema();
         let dfs = self.pre_finalize()?;
         if dfs.is_empty() {
             return Ok(FinalizedSink::Finished(DataFrame::from(

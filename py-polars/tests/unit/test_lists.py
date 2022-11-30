@@ -545,3 +545,22 @@ def test_list_sliced_get_5186() -> None:
             ]
         )
     )
+
+
+def test_empty_eval_dtype_5546() -> None:
+    df = pl.DataFrame([{"a": [{"name": 1}, {"name": 2}]}])
+
+    dtype = df.dtypes[0]
+
+    assert (
+        df.limit(0).with_column(
+            pl.col("a")
+            .arr.eval(pl.element().filter(pl.first().struct.field("name") == 1))
+            .alias("a_filtered")
+        )
+    ).dtypes == [dtype, dtype]
+
+
+def test_fast_explode_flag() -> None:
+    df1 = pl.DataFrame({"values": [[[1, 2]]]})
+    assert df1.clone().vstack(df1)["values"].flags["FAST_EXPLODE"]

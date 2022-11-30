@@ -63,7 +63,6 @@ groupby_list = []
 cum_agg = []
 # rolling window functions
 rolling_window = []
-interpolate = []
 rank = []
 diff = []
 pct_change = ["diff"]
@@ -128,7 +127,6 @@ docs-selection = [
   "mode",
   "cum_agg",
   "rolling_window",
-  "interpolate",
   "diff",
   "moment",
   "dtype-categorical",
@@ -173,6 +171,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 smartstring = { version = "1" }
 thiserror.workspace = true
+xxhash-rust.workspace = true
 
 [dev-dependencies]
 bincode = "1"

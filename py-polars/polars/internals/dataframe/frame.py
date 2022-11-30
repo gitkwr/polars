@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import os
+import random
 import sys
 import typing
 from collections.abc import Sized
@@ -65,7 +66,6 @@ from polars.utils import (
     _prepare_row_count_args,
     _process_null_values,
     _timedelta_to_pl_duration,
-    deprecated_alias,
     format_path,
     handle_projection_columns,
     is_bool_sequence,
@@ -100,7 +100,6 @@ if TYPE_CHECKING:
         ComparisonOperator,
         CsvEncoding,
         FillNullStrategy,
-        InterpolationMethod,
         IpcCompression,
         JoinStrategy,
         NullStrategy,
@@ -108,7 +107,9 @@ if TYPE_CHECKING:
         ParallelStrategy,
         ParquetCompression,
         PivotAgg,
+        RollingInterpolationMethod,
         SizeUnit,
+        StartBy,
         UniqueKeepStrategy,
         UnstackDirection,
     )
@@ -1470,7 +1471,7 @@ class DataFrame:
     def _ipython_key_completions_(self) -> list[str]:
         return self.columns
 
-    def _repr_html_(self) -> str:
+    def _repr_html_(self, **kwargs: Any) -> str:
         """
         Format output data in HTML for display in Jupyter Notebooks.
 
@@ -1488,7 +1489,15 @@ class DataFrame:
         if max_rows < 0:
             max_rows = self.shape[0]
 
-        return "\n".join(NotebookFormatter(self, max_cols, max_rows).render())
+        from_series = kwargs.get("from_series", False)
+        return "\n".join(
+            NotebookFormatter(
+                self,
+                max_cols=max_cols,
+                max_rows=max_rows,
+                from_series=from_series,
+            ).render()
+        )
 
     def to_arrow(self) -> pa.Table:
         """
@@ -1802,6 +1811,19 @@ class DataFrame:
         --------
         DataFrame.write_ndjson
 
+        Examples
+        --------
+        >>> df = pl.DataFrame(
+        ...     {
+        ...         "foo": [1, 2, 3],
+        ...         "bar": [6, 7, 8],
+        ...     }
+        ... )
+        >>> df.write_json()
+        '{"columns":[{"name":"foo","datatype":"Int64","values":[1,2,3]},{"name":"bar","datatype":"Int64","values":[6,7,8]}]}'
+        >>> df.write_json(row_oriented=True)
+        '[{"foo":1,"bar":6},{"foo":2,"bar":7},{"foo":3,"bar":8}]'
+
         """
         if json_lines is not None:
             warn(
@@ -1849,7 +1871,7 @@ class DataFrame:
         ...
 
     def write_ndjson(self, file: IOBase | str | Path | None = None) -> str | None:
-        """
+        r"""
         Serialize to newline delimited JSON representation.
 
         Parameters
@@ -1857,6 +1879,17 @@ class DataFrame:
         file
             File path to which the result should be written. If set to ``None``
             (default), the output is returned as a string instead.
+
+        Examples
+        --------
+        >>> df = pl.DataFrame(
+        ...     {
+        ...         "foo": [1, 2, 3],
+        ...         "bar": [6, 7, 8],
+        ...     }
+        ... )
+        >>> df.write_ndjson()
+        '{"foo":1,"bar":6}\n{"foo":2,"bar":7}\n{"foo":3,"bar":8}\n'
 
         """
         if isinstance(file, (str, Path)):
@@ -2027,6 +2060,20 @@ class DataFrame:
         compression : {'uncompressed', 'snappy', 'deflate'}
             Compression method. Defaults to "uncompressed".
 
+        Examples
+        --------
+        >>> import pathlib
+        >>>
+        >>> df = pl.DataFrame(
+        ...     {
+        ...         "foo": [1, 2, 3, 4, 5],
+        ...         "bar": [6, 7, 8, 9, 10],
+        ...         "ham": ["a", "b", "c", "d", "e"],
+        ...     }
+        ... )
+        >>> path: pathlib.Path = dirpath / "new_file.avro"
+        >>> df.write_avro(path)
+
         """
         if compression is None:
             compression = "uncompressed"
@@ -2049,6 +2096,20 @@ class DataFrame:
             File path to which the file should be written.
         compression : {'uncompressed', 'lz4', 'zstd'}
             Compression method. Defaults to "uncompressed".
+
+        Examples
+        --------
+        >>> import pathlib
+        >>>
+        >>> df = pl.DataFrame(
+        ...     {
+        ...         "foo": [1, 2, 3, 4, 5],
+        ...         "bar": [6, 7, 8, 9, 10],
+        ...         "ham": ["a", "b", "c", "d", "e"],
+        ...     }
+        ... )
+        >>> path: pathlib.Path = dirpath / "new_file.arrow"
+        >>> df.write_ipc(path)
 
         """
         if compression is None:
@@ -2101,6 +2162,20 @@ class DataFrame:
             At the moment C++ supports more features.
         pyarrow_options
             Arguments passed to ``pyarrow.parquet.write_table``.
+
+        Examples
+        --------
+        >>> import pathlib
+        >>>
+        >>> df = pl.DataFrame(
+        ...     {
+        ...         "foo": [1, 2, 3, 4, 5],
+        ...         "bar": [6, 7, 8, 9, 10],
+        ...         "ham": ["a", "b", "c", "d", "e"],
+        ...     }
+        ... )
+        >>> path: pathlib.Path = dirpath / "new_file.parquet"
+        >>> df.write_parquet(path)
 
         """
         if compression is None:
@@ -2458,6 +2533,20 @@ class DataFrame:
         │ 1   ┆ 6   ┆ a   │
         └─────┴─────┴─────┘
 
+        Filter on an OR condition:
+
+        >>> df.filter((pl.col("foo") == 1) | (pl.col("ham") == "c"))
+        shape: (2, 3)
+        ┌─────┬─────┬─────┐
+        │ foo ┆ bar ┆ ham │
+        │ --- ┆ --- ┆ --- │
+        │ i64 ┆ i64 ┆ str │
+        ╞═════╪═════╪═════╡
+        │ 1   ┆ 6   ┆ a   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
+        │ 3   ┆ 8   ┆ c   │
+        └─────┴─────┴─────┘
+
         """
         if _NUMPY_TYPE(predicate) and isinstance(predicate, np.ndarray):
             predicate = pli.Series(predicate)
@@ -2465,7 +2554,7 @@ class DataFrame:
         return (
             self.lazy()
             .filter(predicate)  # type: ignore[arg-type]
-            .collect(no_optimization=True, string_cache=False)
+            .collect(no_optimization=True)
         )
 
     def describe(self: DF) -> DF:
@@ -2668,11 +2757,7 @@ class DataFrame:
 
         """
         if not isinstance(by, str) and isinstance(by, (Sequence, pli.Expr)):
-            df = (
-                self.lazy()
-                .sort(by, reverse, nulls_last)
-                .collect(no_optimization=True, string_cache=False)
-            )
+            df = self.lazy().sort(by, reverse, nulls_last).collect(no_optimization=True)
             return df
         return self._from_pydf(self._df.sort(by, reverse, nulls_last))
 
@@ -2782,7 +2867,6 @@ class DataFrame:
             length = self.height - offset + length
         return self._from_pydf(self._df.slice(offset, length))
 
-    @deprecated_alias(length="n")
     def limit(self: DF, n: int = 5) -> DF:
         """
         Get the first `n` rows.
@@ -2818,7 +2902,6 @@ class DataFrame:
         """
         return self.head(n)
 
-    @deprecated_alias(length="n")
     def head(self: DF, n: int = 5) -> DF:
         """
         Get the first `n` rows.
@@ -2854,7 +2937,6 @@ class DataFrame:
         """
         return self._from_pydf(self._df.head(n))
 
-    @deprecated_alias(length="n")
     def tail(self: DF, n: int = 5) -> DF:
         """
         Get the last `n` rows.
@@ -3035,6 +3117,30 @@ class DataFrame:
         │ 4   ┆ 40  │
         └─────┴─────┘
 
+        >>> df = pl.DataFrame({"b": [1, 2], "a": [3, 4]})
+        >>> df
+        shape: (2, 2)
+        ┌─────┬─────┐
+        │ b   ┆ a   │
+        │ --- ┆ --- │
+        │ i64 ┆ i64 │
+        ╞═════╪═════╡
+        │ 1   ┆ 3   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┤
+        │ 2   ┆ 4   │
+        └─────┴─────┘
+        >>> df.pipe(lambda tdf: tdf.select(sorted(tdf.columns)))
+        shape: (2, 2)
+        ┌─────┬─────┐
+        │ a   ┆ b   │
+        │ --- ┆ --- │
+        │ i64 ┆ i64 │
+        ╞═════╪═════╡
+        │ 3   ┆ 1   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┤
+        │ 4   ┆ 2   │
+        └─────┴─────┘
+
         """
         return func(self, *args, **kwargs)
 
@@ -3159,6 +3265,7 @@ class DataFrame:
     def groupby_rolling(
         self: DF,
         index_column: str,
+        *,
         period: str | timedelta,
         offset: str | timedelta | None = None,
         closed: ClosedWindow = "right",
@@ -3269,6 +3376,7 @@ class DataFrame:
     def groupby_dynamic(
         self: DF,
         index_column: str,
+        *,
         every: str | timedelta,
         period: str | timedelta | None = None,
         offset: str | timedelta | None = None,
@@ -3276,6 +3384,7 @@ class DataFrame:
         include_boundaries: bool = False,
         closed: ClosedWindow = "left",
         by: str | Sequence[str] | pli.Expr | Sequence[pli.Expr] | None = None,
+        start_by: StartBy = "window",
     ) -> DynamicGroupBy[DF]:
         """
         Group based on a time value (or index value of type Int32, Int64).
@@ -3342,6 +3451,11 @@ class DataFrame:
             Define whether the temporal window interval is closed or not.
         by
             Also group by this column/these columns
+        start_by : {'window', 'datapoint', 'monday'}
+            The strategy to determine the start of the first window by.
+            * 'window': Truncate the start of the window with the 'every' argument.
+            * 'datapoint': Start from the first encountered data point.
+            * 'monday': Start the window on the monday before the first data point.
 
         Examples
         --------
@@ -3580,11 +3694,13 @@ class DataFrame:
             include_boundaries,
             closed,
             by,
+            start_by,
         )
 
     def upsample(
         self: DF,
         time_column: str,
+        *,
         every: str | timedelta,
         offset: str | timedelta | None = None,
         by: str | Sequence[str] | None = None,
@@ -4098,11 +4214,7 @@ class DataFrame:
         └──────┴─────┘
 
         """
-        return (
-            self.lazy()
-            .with_column(column)
-            .collect(no_optimization=True, string_cache=False)
-        )
+        return self.lazy().with_column(column).collect(no_optimization=True)
 
     def hstack(
         self: DF,
@@ -4254,7 +4366,6 @@ class DataFrame:
         self._df.extend(other._df)
         return self
 
-    @deprecated_alias(name="columns")
     def drop(self: DF, columns: str | Sequence[str]) -> DF:
         """
         Remove column from DataFrame and return as new.
@@ -5234,7 +5345,7 @@ class DataFrame:
         return (
             self.lazy()
             .shift_and_fill(periods, fill_value)
-            .collect(no_optimization=True, string_cache=False)
+            .collect(no_optimization=True)
         )
 
     def is_duplicated(self) -> pli.Series:
@@ -5311,6 +5422,18 @@ class DataFrame:
         Returns
         -------
         LazyFrame
+
+        Examples
+        --------
+        >>> df = pl.DataFrame(
+        ...     {
+        ...         "a": [None, 2, 3, 4],
+        ...         "b": [0.5, None, 2.5, 13],
+        ...         "c": [True, True, False, None],
+        ...     }
+        ... )
+        >>> df.lazy()  # doctest: +ELLIPSIS
+        <polars.LazyFrame object at ...>
 
         """
         return pli.wrap_ldf(self._df.lazy())
@@ -5411,10 +5534,7 @@ class DataFrame:
 
         """
         return self._from_pydf(
-            self.lazy()
-            .select(exprs)
-            .collect(no_optimization=True, string_cache=False)
-            ._df
+            self.lazy().select(exprs).collect(no_optimization=True)._df
         )
 
     def with_columns(
@@ -5490,21 +5610,15 @@ class DataFrame:
         if exprs is not None and not isinstance(exprs, Sequence):
             exprs = [exprs]
         return (
-            self.lazy()
-            .with_columns(exprs, **named_exprs)
-            .collect(no_optimization=True, string_cache=False)
+            self.lazy().with_columns(exprs, **named_exprs).collect(no_optimization=True)
         )
 
     @overload
-    def n_chunks(self, strategy: Literal["first"]) -> int:
+    def n_chunks(self, strategy: Literal["first"] = ...) -> int:
         ...
 
     @overload
     def n_chunks(self, strategy: Literal["all"]) -> list[int]:
-        ...
-
-    @overload
-    def n_chunks(self, strategy: str = "first") -> int | list[int]:
         ...
 
     def n_chunks(self, strategy: str = "first") -> int | list[int]:
@@ -5953,7 +6067,7 @@ class DataFrame:
         return self.select(pli.all().product())
 
     def quantile(
-        self: DF, quantile: float, interpolation: InterpolationMethod = "nearest"
+        self: DF, quantile: float, interpolation: RollingInterpolationMethod = "nearest"
     ) -> DF:
         """
         Aggregate the columns of this DataFrame to their quantile value.
@@ -6214,7 +6328,7 @@ class DataFrame:
             Shuffle the order of sampled data points.
         seed
             Seed for the random number generator. If set to None (default), a random
-            seed is used.
+            seed is generated using the ``random`` module.
 
         Examples
         --------
@@ -6240,6 +6354,9 @@ class DataFrame:
         """
         if n is not None and frac is not None:
             raise ValueError("cannot specify both `n` and `frac`")
+
+        if seed is None:
+            seed = random.randint(0, 10000)
 
         if n is None and frac is not None:
             return self._from_pydf(
@@ -6496,10 +6613,10 @@ class DataFrame:
         shape: (4,)
         Series: '' [u64]
         [
-            12239174968153954787
-            17976148875586754089
+            10783150408545073287
+            1438741209321515184
             10047419486152048166
-            13766281409932363907
+            2047317070637311557
         ]
 
         """
@@ -6654,6 +6771,23 @@ class DataFrame:
         ----------
         kwargs
             keyword arguments are passed to numpy corrcoef
+
+        Examples
+        --------
+        >>> df = pl.DataFrame({"foo": [1, 2, 3], "bar": [3, 2, 1], "ham": [7, 8, 9]})
+        >>> df.pearson_corr()
+        shape: (3, 3)
+        ┌──────┬──────┬──────┐
+        │ foo  ┆ bar  ┆ ham  │
+        │ ---  ┆ ---  ┆ ---  │
+        │ f64  ┆ f64  ┆ f64  │
+        ╞══════╪══════╪══════╡
+        │ 1.0  ┆ -1.0 ┆ 1.0  │
+        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┤
+        │ -1.0 ┆ 1.0  ┆ -1.0 │
+        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┤
+        │ 1.0  ┆ -1.0 ┆ 1.0  │
+        └──────┴──────┴──────┘
 
         """
         return DataFrame(

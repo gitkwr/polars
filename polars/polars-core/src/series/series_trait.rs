@@ -198,10 +198,6 @@ pub trait SeriesTrait:
         IsSorted::Not
     }
 
-    #[cfg(feature = "interpolate")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "interpolate")))]
-    fn interpolate(&self) -> Series;
-
     /// Rename the Series.
     fn rename(&mut self, name: &str);
 
@@ -265,11 +261,6 @@ pub trait SeriesTrait:
     /// Shrink the capacity of this array to fit its length.
     fn shrink_to_fit(&mut self) {
         panic!("shrink to fit not supported for dtype {:?}", self.dtype())
-    }
-
-    /// Append Arrow array of same dtype to this Series.
-    fn append_array(&mut self, _other: ArrayRef) -> PolarsResult<()> {
-        invalid_operation_panic!(self)
     }
 
     /// Take `num_elements` from the top as a zero copy view.

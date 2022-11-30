@@ -163,7 +163,7 @@ bitflags! {
     pub(crate) struct Settings: u8 {
     const SORTED_ASC = 0x01;
     const SORTED_DSC = 0x02;
-    const FAST_EXPLODE_LIST = 0x03;
+    const FAST_EXPLODE_LIST = 0x04;
 }}
 
 impl<T: PolarsDataType> ChunkedArray<T> {
@@ -329,34 +329,6 @@ impl<T: PolarsDataType> ChunkedArray<T> {
     #[inline]
     pub fn null_count(&self) -> usize {
         self.chunks.iter().map(|arr| arr.null_count()).sum()
-    }
-
-    /// Append arrow array in place.
-    ///
-    /// ```rust
-    /// # use polars_core::prelude::*;
-    /// let mut array = Int32Chunked::new("array", &[1, 2]);
-    /// let array_2 = Int32Chunked::new("2nd", &[3]);
-    ///
-    /// array.append(&array_2);
-    /// assert_eq!(Vec::from(&array), [Some(1), Some(2), Some(3)])
-    /// ```
-    pub fn append_array(&mut self, other: ArrayRef) -> PolarsResult<()> {
-        if self.field.data_type() == other.data_type() {
-            let length = other.len() as IdxSize;
-            self.chunks.push(other);
-            self.length += length;
-            Ok(())
-        } else {
-            Err(PolarsError::SchemaMisMatch(
-                format!(
-                    "cannot append array of type {:?} in array of type {:?}",
-                    other.data_type(),
-                    self.dtype()
-                )
-                .into(),
-            ))
-        }
     }
 
     /// Create a new ChunkedArray from self, where the chunks are replaced.
@@ -723,15 +695,6 @@ pub(crate) mod test {
         let a = get_chunked_array();
         let new = a.take([0usize, 1].iter().copied().into()).unwrap();
         assert_eq!(new.len(), 2)
-    }
-
-    #[test]
-    fn get() {
-        let mut a = get_chunked_array();
-        assert_eq!(AnyValue::Int32(2), a.get_any_value(1));
-        // check if chunks indexes are properly determined
-        a.append_array(a.chunks[0].clone()).unwrap();
-        assert_eq!(AnyValue::Int32(1), a.get_any_value(3));
     }
 
     #[test]

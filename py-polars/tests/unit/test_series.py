@@ -1604,6 +1604,19 @@ def test_arg_min_and_arg_max() -> None:
     assert s.arg_min() == 3
     assert s.arg_max() == 0
 
+    s = pl.Series([None, True, False, True])
+    assert s.arg_min() == 2
+    assert s.arg_max() == 1
+    s = pl.Series([None, None], dtype=pl.Boolean)
+    assert s.arg_min() is None
+    assert s.arg_max() is None
+    s = pl.Series([True, True])
+    assert s.arg_min() == 0
+    assert s.arg_max() == 0
+    s = pl.Series([False, False])
+    assert s.arg_min() == 0
+    assert s.arg_max() == 0
+
 
 def test_is_null_is_not_null() -> None:
     s = pl.Series("a", [1.0, 2.0, 3.0, None])
@@ -1822,7 +1835,7 @@ def test_dt_year_month_week_day_ordinal_day() -> None:
     verify_series_and_expr_api(a, exp, "dt.year")
 
     verify_series_and_expr_api(a, pl.Series("a", [5, 10, 2], dtype=UInt32), "dt.month")
-    verify_series_and_expr_api(a, pl.Series("a", [0, 4, 1], dtype=UInt32), "dt.weekday")
+    verify_series_and_expr_api(a, pl.Series("a", [1, 5, 2], dtype=UInt32), "dt.weekday")
     verify_series_and_expr_api(a, pl.Series("a", [21, 40, 8], dtype=UInt32), "dt.week")
     verify_series_and_expr_api(a, pl.Series("a", [19, 4, 20], dtype=UInt32), "dt.day")
     verify_series_and_expr_api(
@@ -2386,6 +2399,12 @@ def test_repr() -> None:
     assert "1001" in x_repr
     for n in x.to_list():
         assert str(n) in x_repr
+
+
+def test_repr_html(df: pl.DataFrame) -> None:
+    # check it does not panic/error, and appears to contain a table
+    html = pl.Series("misc", [123, 456, 789])._repr_html_()
+    assert "<table" in html
 
 
 def test_builtin_abs() -> None:

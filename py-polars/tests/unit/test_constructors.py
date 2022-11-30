@@ -256,6 +256,9 @@ def test_init_series() -> None:
     assert df.rows() == [(1,), (2,), (3,)]
     assert df.schema == {"a": pl.UInt32}
 
+    # nested list
+    assert pl.Series([[[2, 2]]]).dtype == pl.List(pl.List(pl.Int64))
+
 
 def test_init_seq_of_seq() -> None:
     # List of lists
@@ -457,6 +460,15 @@ def test_from_dicts_list_struct_without_inner_dtype() -> None:
         ],
         "days_of_week": [1, 2],
     }
+
+    # 5611
+    df = pl.from_dicts(
+        [
+            {"a": []},
+            {"a": [{"b": 1}]},
+        ]
+    )
+    assert df.to_dict(False) == {"a": [[], [{"b": 1}]]}
 
 
 def test_upcast_primitive_and_strings() -> None:

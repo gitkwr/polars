@@ -6,7 +6,6 @@ use polars_core::prelude::*;
 
 use crate::logical_plan::iterator::ArenaExprIter;
 use crate::logical_plan::Context;
-#[cfg(feature = "meta")]
 use crate::prelude::names::COUNT;
 use crate::prelude::*;
 
@@ -136,7 +135,6 @@ pub fn has_null(current_expr: &Expr) -> bool {
 }
 
 /// output name of expr
-#[cfg(feature = "meta")]
 pub(crate) fn expr_output_name(expr: &Expr) -> PolarsResult<Arc<str>> {
     for e in expr {
         match e {
@@ -359,4 +357,21 @@ where
         };
     }
     single_pred.expect("an empty iterator was passed")
+}
+
+pub fn expr_is_projected_upstream(
+    e: &Node,
+    input: Node,
+    lp_arena: &mut Arena<ALogicalPlan>,
+    expr_arena: &Arena<AExpr>,
+    projected_names: &PlHashSet<Arc<str>>,
+) -> bool {
+    let input_schema = lp_arena.get(input).schema(lp_arena);
+    // don't do projection that is not used in upstream selection
+    let output_field = expr_arena
+        .get(*e)
+        .to_field(input_schema.as_ref(), Context::Default, expr_arena)
+        .unwrap();
+    let output_name = output_field.name();
+    projected_names.contains(output_name.as_str())
 }

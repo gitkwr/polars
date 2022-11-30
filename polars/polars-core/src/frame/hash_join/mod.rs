@@ -294,6 +294,10 @@ impl ZipOuterJoinColumn for Float64Chunked {
     }
 }
 
+pub fn _join_suffix_name(name: &str, suffix: &str) -> String {
+    format!("{}{}", name, suffix)
+}
+
 /// Utility method to finish a join.
 #[doc(hidden)]
 pub fn _finish_join(
@@ -317,7 +321,7 @@ pub fn _finish_join(
     let suffix = suffix.unwrap_or("_right");
 
     for name in rename_strs {
-        df_right.rename(&name, &format!("{}{}", name, suffix))?;
+        df_right.rename(&name, &_join_suffix_name(&name, suffix))?;
     }
 
     drop(left_names);
@@ -880,8 +884,22 @@ impl DataFrame {
     ) -> PolarsResult<DataFrame> {
         #[cfg(feature = "dtype-categorical")]
         check_categorical_src(s_left.dtype(), s_right.dtype())?;
-        let ids = sort_or_hash_left(s_left, s_right, verbose);
-        self.finish_left_join(ids, &other.drop(s_right.name()).unwrap(), suffix, slice)
+
+        // ensure that the chunks are aligned otherwise we go OOB
+        let mut left = self.clone();
+        let mut s_left = s_left.clone();
+        let mut right = other.clone();
+        let mut s_right = s_right.clone();
+        if left.should_rechunk() {
+            left.as_single_chunk_par();
+            s_left = s_left.rechunk();
+        }
+        if right.should_rechunk() {
+            right.as_single_chunk_par();
+            s_right = s_right.rechunk();
+        }
+        let ids = sort_or_hash_left(&s_left, &s_right, verbose);
+        left.finish_left_join(ids, &right.drop(s_right.name()).unwrap(), suffix, slice)
     }
 
     #[cfg(feature = "semi_anti_join")]
@@ -1273,7 +1291,9 @@ mod test {
             .unwrap();
         // create a new cache
         reset_string_cache();
-        let sc = IUseStringCache::new();
+
+        // _sc is needed to ensure we hold the string cache.
+        let _sc = IUseStringCache::new();
 
         df_b.try_apply("bar", |s| s.cast(&DataType::Categorical(None)))
             .unwrap();

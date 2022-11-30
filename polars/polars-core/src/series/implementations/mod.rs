@@ -225,11 +225,6 @@ macro_rules! impl_dyn_series {
                 ChunkRollApply::rolling_apply(&self.0, _f, _options).map(|ca| ca.into_series())
             }
 
-            #[cfg(feature = "interpolate")]
-            fn interpolate(&self) -> Series {
-                self.0.interpolate().into_series()
-            }
-
             fn bitand(&self, other: &Series) -> PolarsResult<Series> {
                 let other = if other.len() == 1 {
                     Cow::Owned(other.cast(self.dtype())?)
@@ -276,10 +271,6 @@ macro_rules! impl_dyn_series {
             }
             fn shrink_to_fit(&mut self) {
                 self.0.shrink_to_fit()
-            }
-
-            fn append_array(&mut self, other: ArrayRef) -> PolarsResult<()> {
-                self.0.append_array(other)
             }
 
             fn slice(&self, offset: i64, length: usize) -> Series {

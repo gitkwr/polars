@@ -1,7 +1,6 @@
 use polars_arrow::prelude::QuantileInterpolOptions;
 use polars_core::frame::explode::MeltArgs;
 use polars_core::series::ops::NullBehavior;
-use polars_core::utils::concat_df;
 use polars_time::prelude::DateMethods;
 
 use super::*;
@@ -426,13 +425,13 @@ fn test_lazy_query_9() -> PolarsResult<()> {
 ))]
 fn test_lazy_query_10() {
     use polars_core::export::chrono::Duration as ChronoDuration;
-    let date = NaiveDate::from_ymd(2021, 3, 5);
+    let date = NaiveDate::from_ymd_opt(2021, 3, 5).unwrap();
     let x: Series = DatetimeChunked::from_naive_datetime(
         "x",
         [
-            NaiveDateTime::new(date, NaiveTime::from_hms(12, 0, 0)),
-            NaiveDateTime::new(date, NaiveTime::from_hms(13, 0, 0)),
-            NaiveDateTime::new(date, NaiveTime::from_hms(14, 0, 0)),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(12, 0, 0).unwrap()),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(13, 0, 0).unwrap()),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(14, 0, 0).unwrap()),
         ],
         TimeUnit::Nanoseconds,
     )
@@ -440,9 +439,9 @@ fn test_lazy_query_10() {
     let y: Series = DatetimeChunked::from_naive_datetime(
         "y",
         [
-            NaiveDateTime::new(date, NaiveTime::from_hms(11, 0, 0)),
-            NaiveDateTime::new(date, NaiveTime::from_hms(11, 0, 0)),
-            NaiveDateTime::new(date, NaiveTime::from_hms(11, 0, 0)),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(11, 0, 0).unwrap()),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(11, 0, 0).unwrap()),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(11, 0, 0).unwrap()),
         ],
         TimeUnit::Nanoseconds,
     )
@@ -467,9 +466,9 @@ fn test_lazy_query_10() {
     let x: Series = DatetimeChunked::from_naive_datetime(
         "x",
         [
-            NaiveDateTime::new(date, NaiveTime::from_hms(2, 0, 0)),
-            NaiveDateTime::new(date, NaiveTime::from_hms(3, 0, 0)),
-            NaiveDateTime::new(date, NaiveTime::from_hms(4, 0, 0)),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(2, 0, 0).unwrap()),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(3, 0, 0).unwrap()),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(4, 0, 0).unwrap()),
         ],
         TimeUnit::Milliseconds,
     )
@@ -477,9 +476,9 @@ fn test_lazy_query_10() {
     let y: Series = DatetimeChunked::from_naive_datetime(
         "y",
         [
-            NaiveDateTime::new(date, NaiveTime::from_hms(1, 0, 0)),
-            NaiveDateTime::new(date, NaiveTime::from_hms(1, 0, 0)),
-            NaiveDateTime::new(date, NaiveTime::from_hms(1, 0, 0)),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(1, 0, 0).unwrap()),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(1, 0, 0).unwrap()),
+            NaiveDateTime::new(date, NaiveTime::from_hms_opt(1, 0, 0).unwrap()),
         ],
         TimeUnit::Nanoseconds,
     )
@@ -503,14 +502,14 @@ fn test_lazy_query_10() {
     feature = "dtype-datetime"
 ))]
 fn test_lazy_query_7() {
-    let date = NaiveDate::from_ymd(2021, 3, 5);
+    let date = NaiveDate::from_ymd_opt(2021, 3, 5).unwrap();
     let dates = [
-        NaiveDateTime::new(date, NaiveTime::from_hms(12, 0, 0)),
-        NaiveDateTime::new(date, NaiveTime::from_hms(12, 1, 0)),
-        NaiveDateTime::new(date, NaiveTime::from_hms(12, 2, 0)),
-        NaiveDateTime::new(date, NaiveTime::from_hms(12, 3, 0)),
-        NaiveDateTime::new(date, NaiveTime::from_hms(12, 4, 0)),
-        NaiveDateTime::new(date, NaiveTime::from_hms(12, 5, 0)),
+        NaiveDateTime::new(date, NaiveTime::from_hms_opt(12, 0, 0).unwrap()),
+        NaiveDateTime::new(date, NaiveTime::from_hms_opt(12, 1, 0).unwrap()),
+        NaiveDateTime::new(date, NaiveTime::from_hms_opt(12, 2, 0).unwrap()),
+        NaiveDateTime::new(date, NaiveTime::from_hms_opt(12, 3, 0).unwrap()),
+        NaiveDateTime::new(date, NaiveTime::from_hms_opt(12, 4, 0).unwrap()),
+        NaiveDateTime::new(date, NaiveTime::from_hms_opt(12, 5, 0).unwrap()),
     ];
     let data = vec![Some(1.), Some(2.), Some(3.), Some(4.), None, None];
     let df = DataFrame::new(vec![
@@ -523,7 +522,10 @@ fn test_lazy_query_7() {
         .lazy()
         .with_column(col("data").shift(-1).alias("output"))
         .with_column(col("output").shift(2).alias("shifted"))
-        .filter(col("date").gt(lit(NaiveDateTime::new(date, NaiveTime::from_hms(12, 2, 0)))))
+        .filter(col("date").gt(lit(NaiveDateTime::new(
+            date,
+            NaiveTime::from_hms_opt(12, 2, 0).unwrap(),
+        ))))
         .collect()
         .unwrap();
     let a = out.column("shifted").unwrap().sum::<f64>().unwrap() - 7.0;

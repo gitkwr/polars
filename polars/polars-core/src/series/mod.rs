@@ -198,12 +198,6 @@ impl Series {
         self._get_inner_mut().shrink_to_fit()
     }
 
-    /// Append arrow array of same datatype.
-    pub fn append_array(&mut self, other: ArrayRef) -> PolarsResult<&mut Self> {
-        self._get_inner_mut().append_array(other)?;
-        Ok(self)
-    }
-
     /// Append in place. This is done by adding the chunks of `other` to this [`Series`].
     ///
     /// See [`ChunkedArray::append`] and [`ChunkedArray::extend`].
@@ -478,8 +472,7 @@ impl Series {
 
     /// Take by index. This operation is clone.
     ///
-    /// # Safety
-    ///
+    /// # Notes
     /// Out of bounds access doesn't Error but will return a Null value
     pub fn take_threaded(&self, idx: &IdxCa, rechunk: bool) -> PolarsResult<Series> {
         self.threaded_op(rechunk, idx.len(), &|offset, len| {

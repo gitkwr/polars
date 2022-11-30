@@ -259,7 +259,7 @@ fn is_nested_null(av: &AnyValue) -> bool {
     }
 }
 
-// nested dtypes that are all null, will be set as null leaf dtype
+// nested dtypes that are all null, will be set as null leave dtype
 fn infer_dtype_dynamic(av: &AnyValue) -> DataType {
     match av {
         AnyValue::List(s) if s.null_count() == s.len() => DataType::List(Box::new(DataType::Null)),
@@ -437,13 +437,13 @@ impl<'a> AnyValueBuffer<'a> {
             (Float32(builder), val) => builder.append_value(val.extract()?),
             (Float64(builder), val) => builder.append_value(val.extract()?),
             (Utf8(builder), AnyValue::Utf8(v)) => builder.append_value(v),
+            (Utf8(builder), AnyValue::Utf8Owned(v)) => builder.append_value(v),
             (Utf8(builder), AnyValue::Null) => builder.append_null(),
             // Struct and List can be recursive so use anyvalues for that
             (All(_, vals), v) => vals.push(v),
 
             // dynamic types
             (Utf8(builder), av) => match av {
-                AnyValue::Utf8(v) => builder.append_value(v),
                 AnyValue::Int64(v) => builder.append_value(&format!("{}", v)),
                 AnyValue::Float64(v) => builder.append_value(&format!("{}", v)),
                 AnyValue::Boolean(true) => builder.append_value("true"),

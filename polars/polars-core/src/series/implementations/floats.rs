@@ -164,11 +164,6 @@ macro_rules! impl_dyn_series {
                 ChunkRollApply::rolling_apply(&self.0, _f, _options).map(|ca| ca.into_series())
             }
 
-            #[cfg(feature = "interpolate")]
-            fn interpolate(&self) -> Series {
-                self.0.interpolate().into_series()
-            }
-
             fn rename(&mut self, name: &str) {
                 self.0.rename(name);
             }
@@ -185,10 +180,6 @@ macro_rules! impl_dyn_series {
             }
             fn shrink_to_fit(&mut self) {
                 self.0.shrink_to_fit()
-            }
-
-            fn append_array(&mut self, other: ArrayRef) -> PolarsResult<()> {
-                self.0.append_array(other)
             }
 
             fn slice(&self, offset: i64, length: usize) -> Series {
