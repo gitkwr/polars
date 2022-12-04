@@ -277,6 +277,12 @@ def test_list_to_struct() -> None:
         {"field_0": 1, "field_1": 2, "field_2": 3},
     ]
 
+    # set upper bound
+    df = pl.DataFrame({"lists": [[1, 1, 1], [0, 1, 0], [1, 0, 0]]})
+    assert df.lazy().select(pl.col("lists").arr.to_struct(upper_bound=3)).unnest(
+        "lists"
+    ).sum().collect().columns == ["field_0", "field_1", "field_2"]
+
 
 def test_sort_df_with_list_struct() -> None:
     assert pl.DataFrame([{"a": 1, "b": [{"c": 1}]}]).sort("a").to_dict(False) == {
@@ -677,3 +683,16 @@ def test_suffix_in_struct_creation() -> None:
             }
         ).select(pl.struct(pl.col(["a", "c"]).suffix("_foo")).alias("bar"))
     ).unnest("bar").to_dict(False) == {"a_foo": [1, 2], "c_foo": [5, 6]}
+
+
+def test_concat_list_reverse_struct_fields() -> None:
+    df = pl.DataFrame({"nums": [1, 2, 3, 4], "letters": ["a", "b", "c", "d"]}).select(
+        [
+            pl.col("nums"),
+            pl.struct(["letters", "nums"]).alias("combo"),
+            pl.struct(["nums", "letters"]).alias("reverse_combo"),
+        ]
+    )
+    assert df.select(pl.concat_list(["combo", "reverse_combo"])).frame_equal(
+        df.select(pl.concat_list(["combo", "combo"]))
+    )

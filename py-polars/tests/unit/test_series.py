@@ -1107,6 +1107,21 @@ def test_arange_expr() -> None:
     assert out3.dtype == pl.List
     assert out3[0].to_list() == [0, 2]
 
+    df = pl.DataFrame({"start": [1, 2, 3, 5, 5, 5], "stop": [8, 3, 12, 8, 8, 8]})
+
+    assert df.select(pl.arange(pl.lit(1), pl.col("stop") + 1).alias("test")).to_dict(
+        False
+    ) == {
+        "test": [
+            [1, 2, 3, 4, 5, 6, 7, 8],
+            [1, 2, 3],
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+            [1, 2, 3, 4, 5, 6, 7, 8],
+            [1, 2, 3, 4, 5, 6, 7, 8],
+            [1, 2, 3, 4, 5, 6, 7, 8],
+        ]
+    }
+
 
 def test_round() -> None:
     a = pl.Series("f", [1.003, 2.003])
@@ -2440,3 +2455,11 @@ def test_from_epoch_expr(
 
     expected = pl.Series("timestamp", [exp, None]).cast(exp_type)
     assert_series_equal(result, expected)
+
+
+def test_get_chunks() -> None:
+    a = pl.Series("a", [1, 2])
+    b = pl.Series("a", [3, 4])
+    chunks = pl.concat([a, b], rechunk=False).get_chunks()
+    assert chunks[0].series_equal(a)
+    assert chunks[1].series_equal(b)
