@@ -28,6 +28,7 @@ class StringNameSpace:
         strict: bool = True,
         exact: bool = True,
         cache: bool = True,
+        tz_aware: bool = False,
     ) -> pli.Series:
         """
         Parse a Series of dtype Utf8 to a Date/Datetime Series.
@@ -48,6 +49,9 @@ class StringNameSpace:
             - If False, allow the format to match anywhere in the target string.
         cache
             Use a cache of unique, converted dates to apply the datetime conversion.
+        tz_aware
+            Parse timezone aware datetimes. This may be automatically toggled by the
+            'fmt' given.
 
         Returns
         -------
@@ -402,7 +406,7 @@ class StringNameSpace:
 
         """
 
-    def extract_all(self, pattern: str) -> pli.Series:
+    def extract_all(self, pattern: str | pli.Series) -> pli.Series:
         r"""
         Extracts all matches for the given regex pattern.
 

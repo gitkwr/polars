@@ -61,6 +61,7 @@ performant = ["polars-core/performant", "chunked_ids", "dtype-u8", "dtype-u16", 
 
 # Dataframe formatting.
 fmt = ["polars-core/fmt"]
+fmt_no_tty = ["polars-core/fmt_no_tty"]
 
 # sort by multiple columns
 sort_multiple = ["polars-core/sort_multiple"]
@@ -96,7 +97,7 @@ pct_change = ["polars-core/pct_change", "polars-lazy/pct_change"]
 moment = ["polars-core/moment", "polars-lazy/moment", "polars-ops/moment"]
 arange = ["polars-lazy/arange"]
 true_div = ["polars-lazy/true_div"]
-diagonal_concat = ["polars-core/diagonal_concat"]
+diagonal_concat = ["polars-core/diagonal_concat", "polars-lazy/diagonal_concat"]
 horizontal_concat = ["polars-core/horizontal_concat"]
 abs = ["polars-core/abs", "polars-lazy/abs"]
 dynamic_groupby = ["polars-core/dynamic_groupby", "polars-lazy/dynamic_groupby"]

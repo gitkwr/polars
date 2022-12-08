@@ -32,6 +32,7 @@ class ExprStringNameSpace:
         strict: bool = True,
         exact: bool = True,
         cache: bool = True,
+        tz_aware: bool = False,
     ) -> pli.Expr:
         """
         Parse a Utf8 expression to a Date/Datetime/Time type.
@@ -51,6 +52,9 @@ class ExprStringNameSpace:
             - If False, allow the format to match anywhere in the target string.
         cache
             Use a cache of unique, converted dates to apply the datetime conversion.
+        tz_aware
+            Parse timezone aware datetimes. This may be automatically toggled by the
+            'fmt' given.
 
         Notes
         -----
@@ -106,7 +110,7 @@ class ExprStringNameSpace:
         elif datatype == Datetime:
             tu = datatype.tu  # type: ignore[union-attr]
             dtcol = pli.wrap_expr(
-                self._pyexpr.str_parse_datetime(fmt, strict, exact, cache)
+                self._pyexpr.str_parse_datetime(fmt, strict, exact, cache, tz_aware)
             )
             return dtcol if (tu is None) else dtcol.dt.cast_time_unit(tu)
         elif datatype == Time:
@@ -789,7 +793,7 @@ class ExprStringNameSpace:
         """
         return pli.wrap_expr(self._pyexpr.str_extract(pattern, group_index))
 
-    def extract_all(self, pattern: str) -> pli.Expr:
+    def extract_all(self, pattern: str | pli.Expr) -> pli.Expr:
         r"""
         Extracts all matches for the given regex pattern.
 
@@ -826,7 +830,8 @@ class ExprStringNameSpace:
         └────────────────┘
 
         """
-        return pli.wrap_expr(self._pyexpr.str_extract_all(pattern))
+        pattern = pli.expr_to_lit_or_expr(pattern, str_to_lit=True)
+        return pli.wrap_expr(self._pyexpr.str_extract_all(pattern._pyexpr))
 
     def count_match(self, pattern: str) -> pli.Expr:
         r"""

@@ -1,4 +1,4 @@
-#[cfg(feature = "fmt")]
+#[cfg(any(feature = "fmt", feature = "fmt_no_tty"))]
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -11,9 +11,9 @@ use std::fmt::{Debug, Display, Formatter};
 use arrow::temporal_conversions::*;
 #[cfg(feature = "timezones")]
 use chrono::TimeZone;
-#[cfg(feature = "fmt")]
+#[cfg(any(feature = "fmt", feature = "fmt_no_tty"))]
 use comfy_table::presets::*;
-#[cfg(feature = "fmt")]
+#[cfg(any(feature = "fmt", feature = "fmt_no_tty"))]
 use comfy_table::*;
 use num::{Num, NumCast};
 
@@ -295,7 +295,7 @@ impl Debug for DataFrame {
         Display::fmt(self, f)
     }
 }
-#[cfg(feature = "fmt")]
+#[cfg(any(feature = "fmt", feature = "fmt_no_tty"))]
 fn make_str_val(v: &str, truncate: usize) -> String {
     let v_trunc = &v[..v
         .char_indices()
@@ -310,7 +310,7 @@ fn make_str_val(v: &str, truncate: usize) -> String {
     }
 }
 
-#[cfg(feature = "fmt")]
+#[cfg(any(feature = "fmt", feature = "fmt_no_tty"))]
 fn prepare_row(
     row: Vec<Cow<'_, str>>,
     n_first: usize,
@@ -337,7 +337,7 @@ fn env_is_true(varname: &str) -> bool {
 
 impl Display for DataFrame {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        #[cfg(feature = "fmt")]
+        #[cfg(any(feature = "fmt", feature = "fmt_no_tty"))]
         {
             let height = self.height();
             assert!(
@@ -499,7 +499,12 @@ impl Display for DataFrame {
 
             // if no tbl_width (its not-tty && it is not explicitly set), then set default.
             // this is needed to support non-tty applications
-            if !table.is_tty() && table.width().is_none() {
+            #[cfg(feature = "fmt")]
+            if table.width().is_none() && !table.is_tty() {
+                table.set_width(100);
+            }
+            #[cfg(feature = "fmt_no_tty")]
+            if table.width().is_none() {
                 table.set_width(100);
             }
 
@@ -531,11 +536,11 @@ impl Display for DataFrame {
             }
         }
 
-        #[cfg(not(feature = "fmt"))]
+        #[cfg(not(any(feature = "fmt", feature = "fmt_no_tty")))]
         {
             write!(
                 f,
-                "shape: {:?}\nto see more, compile with the 'fmt' feature",
+                "shape: {:?}\nto see more, compile with the 'fmt' or 'fmt_no_tty' feature",
                 self.shape()
             )?;
         }
@@ -694,10 +699,20 @@ impl Display for AnyValue<'_> {
                     Some(_tz) => {
                         #[cfg(feature = "timezones")]
                         {
-                            let tz = _tz.parse::<chrono_tz::Tz>().unwrap();
-                            let dt_utc = chrono::Utc.from_local_datetime(&ndt).unwrap();
-                            let dt_tz_aware = dt_utc.with_timezone(&tz);
-                            write!(f, "{}", dt_tz_aware)
+                            match _tz.parse::<chrono_tz::Tz>() {
+                                Ok(tz) => {
+                                    let dt_utc = chrono::Utc.from_local_datetime(&ndt).unwrap();
+                                    let dt_tz_aware = dt_utc.with_timezone(&tz);
+                                    write!(f, "{}", dt_tz_aware)
+                                }
+                                Err(_) => match parse_offset(_tz) {
+                                    Ok(offset) => {
+                                        let dt_tz_aware = offset.from_utc_datetime(&ndt);
+                                        write!(f, "{}", dt_tz_aware)
+                                    }
+                                    Err(_) => write!(f, "invalid timezone"),
+                                },
+                            }
                         }
                         #[cfg(not(feature = "timezones"))]
                         {
@@ -869,8 +884,8 @@ mod test {
     fn test_fmt_list() {
         let mut builder =
             ListPrimitiveChunkedBuilder::<Int32Type>::new("a", 10, 10, DataType::Int32);
-        builder.append_slice(Some(&[1, 2, 3]));
-        builder.append_slice(None);
+        builder.append_opt_slice(Some(&[1, 2, 3]));
+        builder.append_opt_slice(None);
         let list = builder.finish().into_series();
 
         assert_eq!(

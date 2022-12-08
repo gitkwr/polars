@@ -148,9 +148,11 @@ fn flatten_df(df: &DataFrame) -> impl Iterator<Item = DataFrame> + '_ {
                 .map(|(s, arr)| {
                     // Safety:
                     // datatypes are correct
-                    unsafe {
+                    let mut out = unsafe {
                         Series::from_chunks_and_dtype_unchecked(s.name(), vec![arr], s.dtype())
-                    }
+                    };
+                    out.set_sorted(s.is_sorted());
+                    out
                 })
                 .collect(),
         );
@@ -330,11 +332,11 @@ macro_rules! match_arrow_data_type_apply_macro_ca {
 
 #[macro_export]
 macro_rules! with_match_physical_numeric_type {(
-    $key_type:expr, | $_:tt $T:ident | $($body:tt)*
+    $dtype:expr, | $_:tt $T:ident | $($body:tt)*
 ) => ({
     macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
     use $crate::datatypes::DataType::*;
-    match $key_type {
+    match $dtype {
         Int8 => __with_ty__! { i8 },
         Int16 => __with_ty__! { i16 },
         Int32 => __with_ty__! { i32 },

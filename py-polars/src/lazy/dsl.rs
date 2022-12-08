@@ -527,6 +527,7 @@ impl PyExpr {
                 strict,
                 exact,
                 cache,
+                tz_aware: false,
             })
             .into()
     }
@@ -537,6 +538,7 @@ impl PyExpr {
         strict: bool,
         exact: bool,
         cache: bool,
+        tz_aware: bool,
     ) -> PyExpr {
         let tu = match fmt {
             Some(ref fmt) => {
@@ -563,6 +565,7 @@ impl PyExpr {
                 strict,
                 exact,
                 cache,
+                tz_aware,
             })
             .into()
     }
@@ -583,6 +586,7 @@ impl PyExpr {
                 strict,
                 exact,
                 cache,
+                tz_aware: false,
             })
             .into()
     }
@@ -747,8 +751,8 @@ impl PyExpr {
         self.inner.clone().str().extract(pat, group_index).into()
     }
 
-    pub fn str_extract_all(&self, pat: &str) -> PyExpr {
-        self.inner.clone().str().extract_all(pat).into()
+    pub fn str_extract_all(&self, pat: PyExpr) -> PyExpr {
+        self.inner.clone().str().extract_all(pat.inner).into()
     }
 
     pub fn count_match(&self, pat: &str) -> PyExpr {
