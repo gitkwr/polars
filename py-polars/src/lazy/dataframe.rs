@@ -353,14 +353,19 @@ impl PyLazyFrame {
         streaming: bool,
     ) -> PyLazyFrame {
         let ldf = self.ldf.clone();
-        let ldf = ldf
+        let mut ldf = ldf
             .with_type_coercion(type_coercion)
             .with_predicate_pushdown(predicate_pushdown)
             .with_simplify_expr(simplify_expr)
             .with_slice_pushdown(slice_pushdown)
-            .with_common_subplan_elimination(cse)
             .with_streaming(streaming)
             .with_projection_pushdown(projection_pushdown);
+
+        #[cfg(feature = "cse")]
+        {
+            ldf = ldf.with_common_subplan_elimination(cse);
+        }
+
         ldf.into()
     }
 
@@ -652,9 +657,9 @@ impl PyLazyFrame {
         ldf.median().into()
     }
 
-    pub fn quantile(&self, quantile: f64, interpolation: Wrap<QuantileInterpolOptions>) -> Self {
+    pub fn quantile(&self, quantile: PyExpr, interpolation: Wrap<QuantileInterpolOptions>) -> Self {
         let ldf = self.ldf.clone();
-        ldf.quantile(quantile, interpolation.0).into()
+        ldf.quantile(quantile.inner, interpolation.0).into()
     }
 
     pub fn explode(&self, column: Vec<PyExpr>) -> Self {
