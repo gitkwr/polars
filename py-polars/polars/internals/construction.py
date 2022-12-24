@@ -81,7 +81,7 @@ def include_unknowns(
     schema: dict[str, PolarsDataType], cols: Sequence[str]
 ) -> dict[str, PolarsDataType]:
     """Complete partial schema dict by including Unknown type."""
-    return {col: (schema.get(col, Unknown) or Unknown) for col in cols}
+    return {col: schema.get(col, Unknown) for col in cols}
 
 
 ################################
@@ -115,10 +115,15 @@ def arrow_to_pyseries(name: str, values: pa.Array, rechunk: bool = True) -> PySe
         pys = PySeries.from_arrow(name, array)
     else:
         if array.num_chunks > 1:
-            it = array.iterchunks()
-            pys = PySeries.from_arrow(name, next(it))
-            for a in it:
-                pys.append(PySeries.from_arrow(name, a))
+            # somehow going through ffi with a structarray
+            # returns the first chunk everytime
+            if isinstance(array.type, pa.StructType):
+                pys = PySeries.from_arrow(name, array.combine_chunks())
+            else:
+                it = array.iterchunks()
+                pys = PySeries.from_arrow(name, next(it))
+                for a in it:
+                    pys.append(PySeries.from_arrow(name, a))
         elif array.num_chunks == 0:
             pys = PySeries.from_arrow(name, pa.array([], array.type))
         else:
@@ -359,14 +364,14 @@ def sequence_to_pyseries(
                 # pass; we create an object if we get here
             else:
                 try:
-                    to_arrow_type = (
-                        dtype_to_arrow_type
-                        if is_polars_dtype(nested_dtype)
-                        else py_type_to_arrow_type
-                    )
-                    nested_arrow_dtype = to_arrow_type(
-                        nested_dtype  # type: ignore[arg-type]
-                    )
+                    if is_polars_dtype(nested_dtype):
+                        nested_arrow_dtype = dtype_to_arrow_type(
+                            nested_dtype  # type: ignore[arg-type]
+                        )
+                    else:
+                        nested_arrow_dtype = py_type_to_arrow_type(
+                            nested_dtype  # type: ignore[arg-type]
+                        )
                 except ValueError:  # pragma: no cover
                     return sequence_from_anyvalue_or_object(name, values)
                 try:
@@ -545,7 +550,7 @@ def _unpack_columns(
     return (
         column_names or None,  # type: ignore[return-value]
         {
-            lookup.get(col[0], col[0]): col[1]
+            lookup.get(col[0], col[0]): col[1]  # type: ignore[misc]
             for col in (columns or [])
             if not isinstance(col, str) and col[1]
         },
@@ -816,6 +821,8 @@ def arrow_to_pydf(
     # dictionaries cannot be built in different batches (categorical does not allow
     # that) so we rechunk them and create them separately.
     dictionary_cols = {}
+    # struct columns don't work properly if they contain multiple chunks.
+    struct_cols = {}
     names = []
     for i, column in enumerate(data):
         # extract the name before casting
@@ -829,6 +836,9 @@ def arrow_to_pydf(
         if pa.types.is_dictionary(column.type):
             ps = arrow_to_pyseries(name, column, rechunk)
             dictionary_cols[i] = pli.wrap_s(ps)
+        elif isinstance(column.type, pa.StructType) and column.num_chunks > 1:
+            ps = arrow_to_pyseries(name, column, rechunk)
+            struct_cols[i] = pli.wrap_s(ps)
         else:
             data_dict[name] = column
 
@@ -850,11 +860,20 @@ def arrow_to_pydf(
     if rechunk:
         pydf = pydf.rechunk()
 
+    reset_order = False
     if len(dictionary_cols) > 0:
         df = pli.wrap_df(pydf)
         df = df.with_columns(
             [pli.lit(s).alias(s.name) for s in dictionary_cols.values()]
         )
+        reset_order = True
+
+    if len(struct_cols) > 0:
+        df = pli.wrap_df(pydf)
+        df = df.with_columns([pli.lit(s).alias(s.name) for s in struct_cols.values()])
+        reset_order = True
+
+    if reset_order:
         df = df[names]
         pydf = df._df
 

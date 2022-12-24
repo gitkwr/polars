@@ -134,11 +134,7 @@ impl private::PrivateSeries for SeriesWrap<DatetimeChunked> {
                     .into_series())
             }
             (dtl, dtr) => Err(PolarsError::ComputeError(
-                format!(
-                    "cannot do subtraction on these date types: {:?}, {:?}",
-                    dtl, dtr
-                )
-                .into(),
+                format!("cannot do subtraction on these date types: {dtl:?}, {dtr:?}",).into(),
             )),
         }
     }
@@ -154,11 +150,7 @@ impl private::PrivateSeries for SeriesWrap<DatetimeChunked> {
                     .into_series())
             }
             (dtl, dtr) => Err(PolarsError::ComputeError(
-                format!(
-                    "cannot do addition on these date types: {:?}, {:?}",
-                    dtl, dtr
-                )
-                .into(),
+                format!("cannot do addition on these date types: {dtl:?}, {dtr:?}",).into(),
             )),
         }
     }
@@ -362,16 +354,14 @@ impl SeriesTrait for SeriesWrap<DatetimeChunked> {
         }
     }
 
-    fn get(&self, index: usize) -> AnyValue {
+    fn get(&self, index: usize) -> PolarsResult<AnyValue> {
         self.0.get_any_value(index)
     }
 
     #[inline]
     #[cfg(feature = "private")]
     unsafe fn get_unchecked(&self, index: usize) -> AnyValue {
-        self.0
-            .get_any_value_unchecked(index)
-            .into_datetime(self.0.time_unit(), self.0.time_zone())
+        self.0.get_any_value_unchecked(index)
     }
 
     fn sort_with(&self, options: SortOptions) -> Series {

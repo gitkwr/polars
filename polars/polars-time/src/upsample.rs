@@ -1,4 +1,5 @@
 use polars_core::prelude::*;
+use polars_ops::prelude::*;
 
 use crate::prelude::*;
 
@@ -176,7 +177,7 @@ fn upsample_single_impl(
             }
         }
         dt => Err(PolarsError::ComputeError(
-            format!("upsample not allowed for index_column of dtype {:?}", dt).into(),
+            format!("upsample not allowed for index_column of dtype {dt:?}").into(),
         )),
     }
 }

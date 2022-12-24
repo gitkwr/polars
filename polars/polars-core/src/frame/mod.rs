@@ -138,7 +138,7 @@ pub struct DataFrame {
 
 pub fn _duplicate_err(name: &str) -> PolarsResult<()> {
     Err(PolarsError::Duplicate(
-        format!("Column with name: '{}' has more than one occurrences", name).into(),
+        format!("Column with name: '{name}' has more than one occurrences").into(),
     ))
 }
 
@@ -194,7 +194,7 @@ impl DataFrame {
     fn check_already_present(&self, name: &str) -> PolarsResult<()> {
         if self.columns.iter().any(|s| s.name() == name) {
             Err(PolarsError::Duplicate(
-                format!("column with name: '{}' already present in DataFrame", name).into(),
+                format!("column with name: '{name}' already present in DataFrame").into(),
             ))
         } else {
             Ok(())
@@ -229,8 +229,7 @@ impl DataFrame {
             let msg = format!(
                 "Could not create a new DataFrame from Series. \
             The Series have different lengths. \
-            Got {:?}",
-                s
+            Got {s:?}",
             );
             Err(PolarsError::ShapeMisMatch(msg.into()))
         };
@@ -755,17 +754,14 @@ impl DataFrame {
         for col in columns {
             if col.len() != height && height != 0 {
                 return Err(PolarsError::ShapeMisMatch(
-                    format!("Could not horizontally stack Series. The Series length {} differs from the DataFrame height: {}", col.len(), height).into()));
+                    format!("Could not horizontally stack Series. The Series length {} differs from the DataFrame height: {height}", col.len()).into()));
             }
 
             let name = col.name();
             if names.contains(name) {
                 return Err(PolarsError::Duplicate(
-                    format!(
-                        "Cannot do hstack operation. Column with name: {} already exists",
-                        name
-                    )
-                    .into(),
+                    format!("Cannot do hstack operation. Column with name: {name} already exists",)
+                        .into(),
                 ));
             }
             names.insert(name);
@@ -1237,7 +1233,8 @@ impl DataFrame {
             }
             None => return None,
         }
-        Some(self.columns.iter().map(|s| s.get(idx)).collect())
+        // safety: we just checked bounds
+        unsafe { Some(self.columns.iter().map(|s| s.get_unchecked(idx)).collect()) }
     }
 
     /// Select a `Series` by index.
@@ -1314,13 +1311,10 @@ impl DataFrame {
             };
 
             if start > end {
-                panic!("slice index starts at {} but ends at {}", start, end);
+                panic!("slice index starts at {start} but ends at {end}");
             }
             if end > len {
-                panic!(
-                    "range end index {} out of range for slice of length {}",
-                    end, len
-                );
+                panic!("range end index {end} out of range for slice of length {len}",);
             }
 
             ops::Range { start, end }
@@ -1351,6 +1345,12 @@ impl DataFrame {
     /// ```
     pub fn find_idx_by_name(&self, name: &str) -> Option<usize> {
         self.columns.iter().position(|s| s.name() == name)
+    }
+
+    /// Get column index of a `Series` by name.
+    pub fn try_find_idx_by_name(&self, name: &str) -> PolarsResult<usize> {
+        self.find_idx_by_name(name)
+            .ok_or_else(|| PolarsError::NotFound(name.to_string().into()))
     }
 
     /// Select a single column by name.
@@ -1421,16 +1421,37 @@ impl DataFrame {
     }
 
     fn select_impl(&self, cols: &[String]) -> PolarsResult<Self> {
-        {
-            let mut names = PlHashSet::with_capacity(cols.len());
-            for name in cols {
-                if !names.insert(name.as_str()) {
-                    _duplicate_err(name)?
-                }
-            }
-        }
+        self.select_check_duplicates(cols)?;
         let selected = self.select_series_impl(cols)?;
         Ok(DataFrame::new_no_checks(selected))
+    }
+
+    pub fn select_physical<I, S>(&self, selection: I) -> PolarsResult<Self>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let cols = selection
+            .into_iter()
+            .map(|s| s.as_ref().to_string())
+            .collect::<Vec<_>>();
+        self.select_physical_impl(&cols)
+    }
+
+    fn select_physical_impl(&self, cols: &[String]) -> PolarsResult<Self> {
+        self.select_check_duplicates(cols)?;
+        let selected = self.select_series_physical_impl(cols)?;
+        Ok(DataFrame::new_no_checks(selected))
+    }
+
+    fn select_check_duplicates(&self, cols: &[String]) -> PolarsResult<()> {
+        let mut names = PlHashSet::with_capacity(cols.len());
+        for name in cols {
+            if !names.insert(name.as_str()) {
+                _duplicate_err(name)?
+            }
+        }
+        Ok(())
     }
 
     /// Select column(s) from this `DataFrame` and return them into a `Vec`.
@@ -1453,17 +1474,46 @@ impl DataFrame {
         self.select_series_impl(&cols)
     }
 
+    fn _names_to_idx_map(&self) -> PlHashMap<&str, usize> {
+        self.columns
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (s.name(), i))
+            .collect()
+    }
+
+    /// A non generic implementation to reduce compiler bloat.
+    fn select_series_physical_impl(&self, cols: &[String]) -> PolarsResult<Vec<Series>> {
+        let selected = if cols.len() > 1 && self.columns.len() > 10 {
+            let name_to_idx = self._names_to_idx_map();
+            cols.iter()
+                .map(|name| {
+                    let idx = *name_to_idx
+                        .get(name.as_str())
+                        .ok_or_else(|| PolarsError::NotFound(name.to_string().into()))?;
+                    Ok(self
+                        .select_at_idx(idx)
+                        .unwrap()
+                        .to_physical_repr()
+                        .into_owned())
+                })
+                .collect::<PolarsResult<Vec<_>>>()?
+        } else {
+            cols.iter()
+                .map(|c| self.column(c).map(|s| s.to_physical_repr().into_owned()))
+                .collect::<PolarsResult<Vec<_>>>()?
+        };
+
+        Ok(selected)
+    }
+
     /// A non generic implementation to reduce compiler bloat.
     fn select_series_impl(&self, cols: &[String]) -> PolarsResult<Vec<Series>> {
         let selected = if cols.len() > 1 && self.columns.len() > 10 {
             // we hash, because there are user that having millions of columns.
             // # https://github.com/pola-rs/polars/issues/1023
-            let name_to_idx: PlHashMap<&str, usize> = self
-                .columns
-                .iter()
-                .enumerate()
-                .map(|(i, s)| (s.name(), i))
-                .collect();
+            let name_to_idx = self._names_to_idx_map();
+
             cols.iter()
                 .map(|name| {
                     let idx = *name_to_idx
@@ -2050,11 +2100,7 @@ impl DataFrame {
         let width = self.width();
         let col = self.columns.get_mut(idx).ok_or_else(|| {
             PolarsError::ComputeError(
-                format!(
-                    "Column index: {} outside of DataFrame with {} columns",
-                    idx, width
-                )
-                .into(),
+                format!("Column index: {idx} outside of DataFrame with {width} columns",).into(),
             )
         })?;
         let name = col.name().to_string();
@@ -2135,11 +2181,7 @@ impl DataFrame {
         let width = self.width();
         let col = self.columns.get_mut(idx).ok_or_else(|| {
             PolarsError::ComputeError(
-                format!(
-                    "Column index: {} outside of DataFrame with {} columns",
-                    idx, width
-                )
-                .into(),
+                format!("Column index: {idx} outside of DataFrame with {width} columns",).into(),
             )
         })?;
         let name = col.name().to_string();
@@ -2361,7 +2403,7 @@ impl DataFrame {
     /// This responsibility is left to the caller as we don't want to take mutable references here,
     /// but we also don't want to rechunk here, as this operation is costly and would benefit the caller
     /// as well.
-    pub fn iter_chunks(&self) -> impl Iterator<Item = ArrowChunk> + '_ {
+    pub fn iter_chunks(&self) -> RecordBatchIter {
         RecordBatchIter {
             columns: &self.columns,
             idx: 0,
@@ -2867,10 +2909,22 @@ impl DataFrame {
             0 => Ok(None),
             1 => Ok(Some(self.columns[0].clone())),
             _ => {
-                let sum = || self.hsum(none_strategy);
+                let columns = self
+                    .columns
+                    .iter()
+                    .cloned()
+                    .filter(|s| {
+                        let dtype = s.dtype();
+                        dtype.is_numeric() || matches!(dtype, DataType::Boolean)
+                    })
+                    .collect();
+                let numeric_df = DataFrame::new_no_checks(columns);
+
+                let sum = || numeric_df.hsum(none_strategy);
 
                 let null_count = || {
-                    self.columns
+                    numeric_df
+                        .columns
                         .par_iter()
                         .map(|s| s.is_null().cast(&DataType::UInt32).unwrap())
                         .reduce_with(|l, r| &l + &r)
@@ -2884,7 +2938,7 @@ impl DataFrame {
 
                 // value lengths: len - null_count
                 let value_length: UInt32Chunked =
-                    (self.width().sub(&null_count)).u32().unwrap().clone();
+                    (numeric_df.width().sub(&null_count)).u32().unwrap().clone();
 
                 // make sure that we do not divide by zero
                 // by replacing with None
@@ -3350,6 +3404,11 @@ impl<'a> Iterator for RecordBatchIter<'a> {
             Some(ArrowChunk::new(batch_cols))
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = self.n_chunks - self.idx;
+        (n, Some(n))
+    }
 }
 
 pub struct PhysRecordBatchIter<'a> {
@@ -3365,6 +3424,14 @@ impl Iterator for PhysRecordBatchIter<'_> {
             .map(|phys_iter| phys_iter.next().cloned())
             .collect::<Option<Vec<_>>>()
             .map(ArrowChunk::new)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if let Some(iter) = self.iters.first() {
+            iter.size_hint()
+        } else {
+            (0, None)
+        }
     }
 }
 

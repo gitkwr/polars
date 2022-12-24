@@ -18,7 +18,7 @@ members = [
 version = "0.24.3"
 
 [workspace.package]
-version = "0.25.1"
+version = "0.26.1"
 
 [workspace.dependencies]
 rayon = "1.5"
@@ -34,11 +34,11 @@ bitflags = "1.3"
 [workspace.dependencies.arrow]
 package = "arrow2"
 # git = "https://github.com/jorgecarleitao/arrow2"
-git = "https://github.com/ritchie46/arrow2"
+# git = "https://github.com/ritchie46/arrow2"
 # rev = "368aacc173a27e2a763d2c6396682a688e5a2707"
 # path = "../arrow2"
-branch = "polars_2022-12-11"
-version = "0.14.1"
+# branch = "polars_2022-12-13"
+version = "0.15"
 default-features = false
 features = [
   "compute_aggregate",

@@ -876,7 +876,18 @@ impl Expr {
     pub fn cumsum(self, reverse: bool) -> Self {
         self.apply(
             move |s: Series| Ok(s.cumsum(reverse)),
-            GetOutput::same_type(),
+            GetOutput::map_dtype(|dt| {
+                use DataType::*;
+                match dt {
+                    Boolean => UInt32,
+                    Int32 => Int32,
+                    UInt32 => UInt32,
+                    UInt64 => UInt64,
+                    Float32 => Float32,
+                    Float64 => Float64,
+                    _ => Int64,
+                }
+            }),
         )
         .with_fmt("cumsum")
     }
@@ -889,6 +900,8 @@ impl Expr {
             GetOutput::map_dtype(|dt| {
                 use DataType::*;
                 match dt {
+                    Boolean => Int64,
+                    UInt64 => UInt64,
                     Float32 => Float32,
                     Float64 => Float64,
                     _ => Int64,
@@ -1510,13 +1523,13 @@ impl Expr {
     /// Add a suffix to the root column name.
     pub fn suffix(self, suffix: &str) -> Expr {
         let suffix = suffix.to_string();
-        self.map_alias(move |name| Ok(format!("{}{}", name, suffix)))
+        self.map_alias(move |name| Ok(format!("{name}{suffix}")))
     }
 
     /// Add a prefix to the root column name.
     pub fn prefix(self, prefix: &str) -> Expr {
         let prefix = prefix.to_string();
-        self.map_alias(move |name| Ok(format!("{}{}", prefix, name)))
+        self.map_alias(move |name| Ok(format!("{prefix}{name}")))
     }
 
     /// Exclude a column from a wildcard/regex selection.
@@ -1893,7 +1906,7 @@ impl Expr {
                     Float64 => Series::new(name, &[f64::INFINITY]),
                     dt => {
                         return Err(PolarsError::ComputeError(
-                            format!("cannot determine upper bound of dtype {}", dt).into(),
+                            format!("cannot determine upper bound of dtype {dt}").into(),
                         ))
                     }
                 };
@@ -1927,7 +1940,7 @@ impl Expr {
                     Float64 => Series::new(name, &[f64::NEG_INFINITY]),
                     dt => {
                         return Err(PolarsError::ComputeError(
-                            format!("cannot determine lower bound of dtype {}", dt).into(),
+                            format!("cannot determine lower bound of dtype {dt}").into(),
                         ))
                     }
                 };

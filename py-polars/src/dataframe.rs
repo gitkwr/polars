@@ -336,7 +336,7 @@ impl PyDataFrame {
             let out = JsonReader::new(mmap_bytes_r)
                 .with_json_format(JsonFormat::JsonLines)
                 .finish()
-                .map_err(|e| PyPolarsErr::Other(format!("{:?}", e)))?;
+                .map_err(|e| PyPolarsErr::Other(format!("{e:?}")))?;
             Ok(out.into())
         } else {
             // memmap the file first
@@ -354,7 +354,7 @@ impl PyDataFrame {
                     let out = JsonReader::new(mmap_bytes_r)
                         .with_json_format(JsonFormat::Json)
                         .finish()
-                        .map_err(|e| PyPolarsErr::Other(format!("{:?}", e)))?;
+                        .map_err(|e| PyPolarsErr::Other(format!("{e:?}")))?;
                     Ok(out.into())
                 }
             }
@@ -369,7 +369,7 @@ impl PyDataFrame {
         let out = JsonReader::new(mmap_bytes_r)
             .with_json_format(JsonFormat::JsonLines)
             .finish()
-            .map_err(|e| PyPolarsErr::Other(format!("{:?}", e)))?;
+            .map_err(|e| PyPolarsErr::Other(format!("{e:?}")))?;
         Ok(out.into())
     }
 
@@ -392,11 +392,11 @@ impl PyDataFrame {
                 .with_json_format(JsonFormat::Json)
                 .finish(&mut self.df),
             (true, _, _) => serde_json::to_writer_pretty(file, &self.df)
-                .map_err(|e| PolarsError::ComputeError(format!("{:?}", e).into())),
+                .map_err(|e| PolarsError::ComputeError(format!("{e:?}").into())),
             (false, _, _) => serde_json::to_writer(file, &self.df)
-                .map_err(|e| PolarsError::ComputeError(format!("{:?}", e).into())),
+                .map_err(|e| PolarsError::ComputeError(format!("{e:?}").into())),
         };
-        r.map_err(|e| PyPolarsErr::Other(format!("{:?}", e)))?;
+        r.map_err(|e| PyPolarsErr::Other(format!("{e:?}")))?;
         Ok(())
     }
 
@@ -408,7 +408,7 @@ impl PyDataFrame {
             .with_json_format(JsonFormat::JsonLines)
             .finish(&mut self.df);
 
-        r.map_err(|e| PyPolarsErr::Other(format!("{:?}", e)))?;
+        r.map_err(|e| PyPolarsErr::Other(format!("{e:?}")))?;
         Ok(())
     }
 
@@ -514,20 +514,22 @@ impl PyDataFrame {
         let null = null_value.unwrap_or_default();
 
         if let Ok(s) = py_f.extract::<&str>(py) {
-            let f = std::fs::File::create(s).unwrap();
-            // no need for a buffered writer, because the csv writer does internal buffering
-            CsvWriter::new(f)
-                .has_header(has_header)
-                .with_delimiter(sep)
-                .with_quoting_char(quote)
-                .with_batch_size(batch_size)
-                .with_datetime_format(datetime_format)
-                .with_date_format(date_format)
-                .with_time_format(time_format)
-                .with_float_precision(float_precision)
-                .with_null_value(null)
-                .finish(&mut self.df)
-                .map_err(PyPolarsErr::from)?;
+            py.allow_threads(|| {
+                let f = std::fs::File::create(s).unwrap();
+                // no need for a buffered writer, because the csv writer does internal buffering
+                CsvWriter::new(f)
+                    .has_header(has_header)
+                    .with_delimiter(sep)
+                    .with_quoting_char(quote)
+                    .with_batch_size(batch_size)
+                    .with_datetime_format(datetime_format)
+                    .with_date_format(date_format)
+                    .with_time_format(time_format)
+                    .with_float_precision(float_precision)
+                    .with_null_value(null)
+                    .finish(&mut self.df)
+                    .map_err(PyPolarsErr::from)
+            })?;
         } else {
             let mut buf = get_file_like(py_f, true)?;
             CsvWriter::new(&mut buf)
@@ -555,11 +557,13 @@ impl PyDataFrame {
         compression: Wrap<Option<IpcCompression>>,
     ) -> PyResult<()> {
         if let Ok(s) = py_f.extract::<&str>(py) {
-            let f = std::fs::File::create(s).unwrap();
-            IpcWriter::new(f)
-                .with_compression(compression.0)
-                .finish(&mut self.df)
-                .map_err(PyPolarsErr::from)?;
+            py.allow_threads(|| {
+                let f = std::fs::File::create(s).unwrap();
+                IpcWriter::new(f)
+                    .with_compression(compression.0)
+                    .finish(&mut self.df)
+                    .map_err(PyPolarsErr::from)
+            })?;
         } else {
             let mut buf = get_file_like(py_f, true)?;
 
@@ -572,13 +576,18 @@ impl PyDataFrame {
     }
 
     #[cfg(feature = "object")]
-    pub fn row_tuple(&self, idx: i64) -> PyObject {
-        Python::with_gil(|py| {
-            let idx = if idx < 0 {
-                (self.df.height() as i64 + idx) as usize
-            } else {
-                idx as usize
-            };
+    pub fn row_tuple(&self, idx: i64) -> PyResult<PyObject> {
+        let idx = if idx < 0 {
+            (self.df.height() as i64 + idx) as usize
+        } else {
+            idx as usize
+        };
+        if idx >= self.df.height() {
+            Err(PolarsError::ComputeError("Index out of bounds.".into()))
+                .map_err(PyPolarsErr::from)?;
+        }
+
+        let out = Python::with_gil(|py| {
             PyTuple::new(
                 py,
                 self.df.get_columns().iter().map(|s| match s.dtype() {
@@ -586,11 +595,12 @@ impl PyDataFrame {
                         let obj: Option<&ObjectValue> = s.get_object(idx).map(|any| any.into());
                         obj.to_object(py)
                     }
-                    _ => Wrap(s.get(idx)).into_py(py),
+                    _ => Wrap(s.get(idx).unwrap()).into_py(py),
                 }),
             )
             .into_py(py)
-        })
+        });
+        Ok(out)
     }
 
     #[cfg(feature = "object")]
@@ -608,7 +618,8 @@ impl PyDataFrame {
                                     s.get_object(idx).map(|any| any.into());
                                 obj.to_object(py)
                             }
-                            _ => Wrap(s.get(idx)).into_py(py),
+                            // safety: we are in bounds.
+                            _ => unsafe { Wrap(s.get_unchecked(idx)).into_py(py) },
                         }),
                     )
                 }),
@@ -679,12 +690,14 @@ impl PyDataFrame {
 
         if let Ok(s) = py_f.extract::<&str>(py) {
             let f = std::fs::File::create(s).unwrap();
-            ParquetWriter::new(f)
-                .with_compression(compression)
-                .with_statistics(statistics)
-                .with_row_group_size(row_group_size)
-                .finish(&mut self.df)
-                .map_err(PyPolarsErr::from)?;
+            py.allow_threads(|| {
+                ParquetWriter::new(f)
+                    .with_compression(compression)
+                    .with_statistics(statistics)
+                    .with_row_group_size(row_group_size)
+                    .finish(&mut self.df)
+                    .map_err(PyPolarsErr::from)
+            })?;
         } else {
             let buf = get_file_like(py_f, true)?;
             ParquetWriter::new(buf)
@@ -1402,7 +1415,7 @@ fn finish_groupby(gb: GroupBy, agg: &str) -> PyResult<PyDataFrame> {
             "agg_list" => gb.agg_list(),
             "groups" => gb.groups(),
             a => Err(PolarsError::ComputeError(
-                format!("agg fn {} does not exists", a).into(),
+                format!("agg fn {a} does not exists").into(),
             )),
         });
 

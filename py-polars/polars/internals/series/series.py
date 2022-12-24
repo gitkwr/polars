@@ -160,7 +160,7 @@ class Series:
     Notice that the dtype is automatically inferred as a polars Int64:
 
     >>> s.dtype
-    <class 'polars.datatypes.Int64'>
+    Int64
 
     Constructing a Series with a specific dtype:
 
@@ -197,10 +197,10 @@ class Series:
         self,
         name: str | ArrayLike | None = None,
         values: ArrayLike | None = None,
-        dtype: type[DataType] | DataType | None = None,
+        dtype: PolarsDataType | None = None,
         strict: bool = True,
         nan_to_null: bool = False,
-        dtype_if_empty: type[DataType] | DataType | None = None,
+        dtype_if_empty: PolarsDataType | None = None,
     ):
 
         # Handle case where values are passed as the first argument
@@ -309,7 +309,7 @@ class Series:
         --------
         >>> s = pl.Series("a", [1, 2, 3])
         >>> s.dtype
-        <class 'polars.datatypes.Int64'>
+        Int64
 
         """
         return self._s.dtype()
@@ -956,6 +956,26 @@ class Series:
     def _repr_html_(self) -> str:
         """Format output data in HTML for display in Jupyter Notebooks."""
         return self.to_frame()._repr_html_(from_series=True)
+
+    def item(self) -> Any:
+        """
+        Return the series as a scalar.
+
+        Equivalent to ``s[0]``, with a check that the shape is (1,).
+
+        Examples
+        --------
+        >>> s = pl.Series("a", [1])
+        >>> s.item()
+        1
+
+        """
+        if len(self) != 1:
+            raise ValueError(
+                f"Can only call .item() if the series is of length 1, "
+                f"series is of length {len(self)}"
+            )
+        return self[0]
 
     def estimated_size(self, unit: SizeUnit = "b") -> int | float:
         """
@@ -2457,9 +2477,7 @@ class Series:
 
     def cast(
         self,
-        dtype: (
-            type[DataType] | type[int] | type[float] | type[str] | type[bool] | DataType
-        ),
+        dtype: (PolarsDataType | type[int] | type[float] | type[str] | type[bool]),
         strict: bool = True,
     ) -> Series:
         """

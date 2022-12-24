@@ -127,11 +127,8 @@ impl Series {
                         let offsets = arr.offsets().clone();
                         let validity = arr.validity().cloned();
 
-                        let values = Box::new(PrimitiveArray::from_data(
-                            ArrowDataType::UInt8,
-                            values,
-                            None,
-                        ));
+                        let values =
+                            Box::new(PrimitiveArray::new(ArrowDataType::UInt8, values, None));
 
                         let dtype = ListArray::<i64>::default_datatype(ArrowDataType::UInt8);
                         // Safety:
@@ -391,7 +388,7 @@ impl Series {
                 Ok(StructChunked::new_unchecked(name, &fields).into_series())
             }
             dt => Err(PolarsError::InvalidOperation(
-                format!("Cannot create polars series from {:?} type", dt).into(),
+                format!("Cannot create polars series from {dt:?} type").into(),
             )),
         }
     }

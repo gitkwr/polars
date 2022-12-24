@@ -88,7 +88,7 @@ pub trait ChunkAnyValue {
     unsafe fn get_any_value_unchecked(&self, index: usize) -> AnyValue;
 
     /// Get a single value. Beware this is slow.
-    fn get_any_value(&self, index: usize) -> AnyValue;
+    fn get_any_value(&self, index: usize) -> PolarsResult<AnyValue>;
 }
 
 #[cfg(feature = "cum_agg")]
@@ -423,9 +423,6 @@ pub trait ChunkVar<T> {
 /// ```
 pub trait ChunkCompare<Rhs> {
     type Item;
-
-    /// Check for equality and regard missing values as equal.
-    fn eq_missing(&self, rhs: Rhs) -> Self::Item;
 
     /// Check for equality.
     fn equal(&self, rhs: Rhs) -> Self::Item;

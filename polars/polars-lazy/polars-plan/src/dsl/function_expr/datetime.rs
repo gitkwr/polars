@@ -54,7 +54,7 @@ impl Display for TemporalFunction {
             Millisecond => "millisecond",
             Microsecond => "microsecond",
             Nanosecond => "nanosecond",
-            TimeStamp(tu) => return write!(f, "dt.timestamp({})", tu),
+            TimeStamp(tu) => return write!(f, "dt.timestamp({tu})"),
             Truncate(..) => "truncate",
             Round(..) => "round",
             #[cfg(feature = "timezones")]
@@ -63,7 +63,7 @@ impl Display for TemporalFunction {
             TzLocalize(_) => "tz_localize",
             DateRange { .. } => return write!(f, "date_range"),
         };
-        write!(f, "dt.{}", s)
+        write!(f, "dt.{s}")
     }
 }
 
@@ -119,7 +119,7 @@ pub(super) fn truncate(s: &Series, every: &str, offset: &str) -> PolarsResult<Se
         DataType::Datetime(_, _) => Ok(s.datetime().unwrap().truncate(every, offset).into_series()),
         DataType::Date => Ok(s.date().unwrap().truncate(every, offset).into_series()),
         dt => Err(PolarsError::ComputeError(
-            format!("expected date/datetime got {:?}", dt).into(),
+            format!("expected date/datetime got {dt:?}").into(),
         )),
     }
 }
@@ -130,7 +130,7 @@ pub(super) fn round(s: &Series, every: &str, offset: &str) -> PolarsResult<Serie
         DataType::Datetime(_, _) => Ok(s.datetime().unwrap().round(every, offset).into_series()),
         DataType::Date => Ok(s.date().unwrap().round(every, offset).into_series()),
         dt => Err(PolarsError::ComputeError(
-            format!("expected date/datetime got {:?}", dt).into(),
+            format!("expected date/datetime got {dt:?}").into(),
         )),
     }
 }
@@ -179,8 +179,8 @@ pub(super) fn date_range_dispatch(
                 let start = start.to_physical_repr();
                 let stop = stop.to_physical_repr();
                 // to milliseconds
-                let start = start.get(0).extract::<i64>().unwrap() * TO_MS;
-                let stop = stop.get(0).extract::<i64>().unwrap() * TO_MS;
+                let start = start.get(0).unwrap().extract::<i64>().unwrap() * TO_MS;
+                let stop = stop.get(0).unwrap().extract::<i64>().unwrap() * TO_MS;
 
                 date_range_impl(
                     name,
@@ -196,8 +196,8 @@ pub(super) fn date_range_dispatch(
             DataType::Datetime(tu, _) => {
                 let start = start.to_physical_repr();
                 let stop = stop.to_physical_repr();
-                let start = start.get(0).extract::<i64>().unwrap();
-                let stop = stop.get(0).extract::<i64>().unwrap();
+                let start = start.get(0).unwrap().extract::<i64>().unwrap();
+                let stop = stop.get(0).unwrap().extract::<i64>().unwrap();
 
                 Ok(
                     date_range_impl(name, start, stop, every, closed, *tu, tz.as_ref())

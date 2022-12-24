@@ -1,6 +1,6 @@
 [package]
 name = "polars"
-version = "0.25.1"
+version = "0.26.1"
 authors = ["ritchie46 <ritchie46@gmail.com>"]
 edition = "2021"
 keywords = ["dataframe", "query-engine", "arrow"]
@@ -57,7 +57,16 @@ avro = ["polars-io", "polars-io/avro"]
 csv-file = ["polars-io", "polars-io/csv-file", "polars-lazy/csv-file"]
 
 # slower builds
-performant = ["polars-core/performant", "chunked_ids", "dtype-u8", "dtype-u16", "cse"]
+performant = [
+  "polars-core/performant",
+  "chunked_ids",
+  "dtype-u8",
+  "dtype-u16",
+  "dtype-struct",
+  "cse",
+  "polars-ops/performant",
+  "streaming",
+]
 
 # Dataframe formatting.
 fmt = ["polars-core/fmt"]
@@ -74,8 +83,8 @@ checked_arithmetic = ["polars-core/checked_arithmetic"]
 repeat_by = ["polars-core/repeat_by", "polars-lazy/repeat_by"]
 is_first = ["polars-core/is_first", "polars-lazy/is_first"]
 is_last = ["polars-core/is_last"]
-asof_join = ["polars-core/asof_join", "polars-lazy/asof_join"]
-cross_join = ["polars-core/cross_join", "polars-lazy/cross_join"]
+asof_join = ["polars-core/asof_join", "polars-lazy/asof_join", "polars-ops/asof_join"]
+cross_join = ["polars-core/cross_join", "polars-lazy/cross_join", "polars-ops/cross_join"]
 dot_product = ["polars-core/dot_product", "polars-lazy/dot_product"]
 concat_str = ["polars-core/concat_str", "polars-lazy/concat_str"]
 row_hash = ["polars-core/row_hash", "polars-lazy/row_hash"]
@@ -108,10 +117,10 @@ product = ["polars-core/product"]
 unique_counts = ["polars-core/unique_counts", "polars-lazy/unique_counts"]
 log = ["polars-ops/log", "polars-lazy/log"]
 partition_by = ["polars-core/partition_by"]
-semi_anti_join = ["polars-core/semi_anti_join", "polars-lazy/semi_anti_join"]
+semi_anti_join = ["polars-core/semi_anti_join", "polars-lazy/semi_anti_join", "polars-ops/semi_anti_join"]
 list_eval = ["polars-lazy/list_eval"]
 cumulative_eval = ["polars-lazy/cumulative_eval"]
-chunked_ids = ["polars-core/chunked_ids", "polars-lazy/chunked_ids"]
+chunked_ids = ["polars-core/chunked_ids", "polars-lazy/chunked_ids", "polars-core/chunked_ids"]
 to_dummies = ["polars-ops/to_dummies"]
 bigidx = ["polars-core/bigidx", "polars-lazy/bigidx"]
 list_to_struct = ["polars-ops/list_to_struct", "polars-lazy/list_to_struct"]
@@ -276,13 +285,13 @@ bench = [
 ]
 
 [dependencies]
-polars-algo = { version = "0.25.1", path = "./polars-algo", optional = true }
-polars-core = { version = "0.25.1", path = "./polars-core", features = ["docs", "private"], default-features = false }
-polars-io = { version = "0.25.1", path = "./polars-io", features = ["private"], default-features = false, optional = true }
-polars-lazy = { version = "0.25.1", path = "./polars-lazy", features = ["private"], default-features = false, optional = true }
-polars-ops = { version = "0.25.1", path = "./polars-ops" }
-polars-sql = { version = "0.2.0", path = "./polars-sql", default-features = false, optional = true }
-polars-time = { version = "0.25.1", path = "./polars-time", default-features = false, optional = true }
+polars-algo = { version = "0.26.1", path = "./polars-algo", optional = true }
+polars-core = { version = "0.26.1", path = "./polars-core", features = ["docs", "private"], default-features = false }
+polars-io = { version = "0.26.1", path = "./polars-io", features = ["private"], default-features = false, optional = true }
+polars-lazy = { version = "0.26.1", path = "./polars-lazy", features = ["private"], default-features = false, optional = true }
+polars-ops = { version = "0.26.1", path = "./polars-ops" }
+polars-sql = { version = "0.2", path = "./polars-sql", default-features = false, optional = true }
+polars-time = { version = "0.26.1", path = "./polars-time", default-features = false, optional = true }
 
 # enable js feature for getrandom to work in wasm
 [target.'cfg(target_family = "wasm")'.dependencies.getrandom]

@@ -15,6 +15,8 @@ mod anonymous_scan;
 pub mod pivot;
 
 use std::borrow::Cow;
+#[cfg(feature = "parquet")]
+use std::path::PathBuf;
 use std::sync::Arc;
 
 pub use anonymous_scan::*;
@@ -266,72 +268,35 @@ impl LazyFrame {
         self.select_local(vec![col("*").reverse()])
     }
 
-    fn rename_impl_swapping(self, mut existing: Vec<String>, mut new: Vec<String>) -> Self {
+    fn rename_impl_swapping(self, existing: Vec<String>, new: Vec<String>) -> Self {
         assert_eq!(new.len(), existing.len());
-        let mut removed = 0;
-        for mut idx in 0..existing.len() {
-            // remove "name" -> "name
-            // these are no ops.
-            idx -= removed;
-            if existing[idx] == new[idx] {
-                existing.swap_remove(idx);
-                new.swap_remove(idx);
-                removed += 1;
-            }
-        }
 
         let existing2 = existing.clone();
         let new2 = new.clone();
-        let udf_schema = move |s: &Schema| {
+        let udf_schema = move |old_schema: &Schema| {
+            let mut new_schema = old_schema.clone();
+
             // schema after renaming
-            let mut new_schema = s.clone();
             for (old, new) in existing2.iter().zip(new2.iter()) {
-                new_schema
-                    .rename(old, new.to_string())
-                    .ok_or_else(|| PolarsError::NotFound(old.to_string().into()))?
+                let dtype = old_schema.try_get(old)?;
+                new_schema.with_column(new.clone(), dtype.clone());
             }
             Ok(Arc::new(new_schema))
         };
 
-        let prefix = "__POLARS_TEMP_";
-
-        let new: Vec<String> = new
-            .iter()
-            .map(|name| format!("{}{}", prefix, name))
-            .collect();
-
-        self.with_columns(
-            existing
-                .iter()
-                .zip(&new)
-                .map(|(old, new)| col(old).alias(new))
-                .collect::<Vec<_>>(),
-        )
-        .map(
+        self.map(
             move |mut df: DataFrame| {
-                let mut cols = std::mem::take(df.get_columns_mut());
-                // we must find the indices before we start swapping,
-                // because swapping may influence the positions we find if columns are swapped for instance.
-                // e.g. a -> b
-                //      b -> a
-                #[allow(clippy::needless_collect)]
-                let existing_idx = existing
+                let positions = existing
                     .iter()
-                    .map(|name| cols.iter().position(|s| s.name() == name.as_str()).unwrap())
-                    .collect::<Vec<_>>();
-                let new_idx = new
-                    .iter()
-                    .map(|name| cols.iter().position(|s| s.name() == name.as_str()).unwrap())
-                    .collect::<Vec<_>>();
+                    .map(|old| df.try_find_idx_by_name(old))
+                    .collect::<PolarsResult<Vec<_>>>()?;
 
-                for (existing_i, new_i) in existing_idx.into_iter().zip(new_idx) {
-                    cols.swap(existing_i, new_i);
-                    let s = &mut cols[existing_i];
-                    let name = &s.name()[prefix.len()..].to_string();
-                    s.rename(name);
+                for (pos, name) in positions.iter().zip(new.iter()) {
+                    df.get_columns_mut()[*pos].rename(name);
                 }
-                cols.truncate(cols.len() - existing.len());
-                DataFrame::new(cols)
+                // recreate dataframe so we check duplicates
+                let columns = std::mem::take(df.get_columns_mut());
+                DataFrame::new(columns)
             },
             None,
             Some(Arc::new(udf_schema)),
@@ -537,7 +502,10 @@ impl LazyFrame {
     }
 
     #[allow(unused_mut)]
-    fn prepare_collect(mut self) -> PolarsResult<(ExecutionState, Box<dyn Executor>)> {
+    fn prepare_collect(
+        mut self,
+        check_sink: bool,
+    ) -> PolarsResult<(ExecutionState, Box<dyn Executor>, bool)> {
         let file_caching = self.opt_state.file_caching;
         let mut expr_arena = Arena::with_capacity(256);
         let mut lp_arena = Arena::with_capacity(128);
@@ -559,13 +527,20 @@ impl LazyFrame {
         } else {
             None
         };
+
+        // file sink should be replaced
+        let no_file_sink = if check_sink {
+            !matches!(lp_arena.get(lp_top), ALogicalPlan::FileSink { .. })
+        } else {
+            true
+        };
         let physical_plan = create_physical_plan(lp_top, &mut lp_arena, &mut expr_arena)?;
 
         let state = ExecutionState::with_finger_prints(finger_prints);
-        Ok((state, physical_plan))
+        Ok((state, physical_plan, no_file_sink))
     }
 
-    /// Execute all the lazy operations and collect them into a [DataFrame](polars_core::frame::DataFrame).
+    /// Execute all the lazy operations and collect them into a [`DataFrame`].
     /// Before execution the query is being optimized.
     ///
     /// # Example
@@ -582,7 +557,7 @@ impl LazyFrame {
     /// }
     /// ```
     pub fn collect(self) -> PolarsResult<DataFrame> {
-        let (mut state, mut physical_plan) = self.prepare_collect()?;
+        let (mut state, mut physical_plan, _) = self.prepare_collect(false)?;
         let out = physical_plan.execute(&mut state);
         #[cfg(debug_assertions)]
         {
@@ -600,11 +575,33 @@ impl LazyFrame {
     ////
     //// The units of the timings are microseconds.
     pub fn profile(self) -> PolarsResult<(DataFrame, DataFrame)> {
-        let (mut state, mut physical_plan) = self.prepare_collect()?;
+        let (mut state, mut physical_plan, _) = self.prepare_collect(false)?;
         state.time_nodes();
         let out = physical_plan.execute(&mut state)?;
         let timer_df = state.finish_timer()?;
         Ok((out, timer_df))
+    }
+
+    //// Stream a query result into a parquet file. This is useful if the final result doesn't fit
+    /// into memory. This methods will return an error if the query cannot be completely done in a
+    /// streaming fashion.
+    #[cfg(feature = "parquet")]
+    pub fn sink_parquet(mut self, path: PathBuf, options: ParquetWriteOptions) -> PolarsResult<()> {
+        self.logical_plan = LogicalPlan::FileSink {
+            input: Box::new(self.logical_plan),
+            payload: FileSinkOptions {
+                path: Arc::new(path),
+                file_type: FileType::Parquet(options),
+            },
+        };
+        let (mut state, mut physical_plan, is_streaming) = self.prepare_collect(true)?;
+
+        if is_streaming {
+            let _ = physical_plan.execute(&mut state)?;
+            Ok(())
+        } else {
+            Err(PolarsError::ComputeError("Cannot run whole the query in a streaming order. Use `collect().write_parquet()` instead.".into()))
+        }
     }
 
     /// Filter by some predicate expression.

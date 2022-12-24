@@ -113,6 +113,17 @@ where
 {
     use ALogicalPlan::*;
     let out = match lp_arena.get(node) {
+        #[cfg(feature = "parquet")]
+        FileSink { input, payload } => {
+            let path = payload.path.as_ref().as_path();
+            let input_schema = lp_arena.get(*input).schema(lp_arena);
+            match &payload.file_type {
+                FileType::Parquet(options) => {
+                    Box::new(ParquetSink::new(path, *options, input_schema.as_ref())?)
+                        as Box<dyn Sink>
+                }
+            }
+        }
         Join {
             input_left,
             input_right,
@@ -120,43 +131,50 @@ where
             left_on,
             right_on,
             ..
-        } => match &options.how {
-            #[cfg(feature = "cross_join")]
-            JoinType::Cross => Box::new(CrossJoin::new(options.suffix.clone())) as Box<dyn Sink>,
-            join_type @ JoinType::Inner | join_type @ JoinType::Left => {
-                let input_schema_left = lp_arena.get(*input_left).schema(lp_arena);
-                let join_columns_left = Arc::new(exprs_to_physical(
-                    left_on,
-                    expr_arena,
-                    to_physical,
-                    Some(input_schema_left.as_ref()),
-                )?);
-                let input_schema_right = lp_arena.get(*input_right).schema(lp_arena);
-                let join_columns_right = Arc::new(exprs_to_physical(
-                    right_on,
-                    expr_arena,
-                    to_physical,
-                    Some(input_schema_right.as_ref()),
-                )?);
+        } => {
+            // slice pushdown optimization should not set this one in a streaming query.
+            assert!(options.slice.is_none());
 
-                let swapped = swap_join_order(options);
+            match &options.how {
+                #[cfg(feature = "cross_join")]
+                JoinType::Cross => {
+                    Box::new(CrossJoin::new(options.suffix.clone())) as Box<dyn Sink>
+                }
+                join_type @ JoinType::Inner | join_type @ JoinType::Left => {
+                    let input_schema_left = lp_arena.get(*input_left).schema(lp_arena);
+                    let join_columns_left = Arc::new(exprs_to_physical(
+                        left_on,
+                        expr_arena,
+                        to_physical,
+                        Some(input_schema_left.as_ref()),
+                    )?);
+                    let input_schema_right = lp_arena.get(*input_right).schema(lp_arena);
+                    let join_columns_right = Arc::new(exprs_to_physical(
+                        right_on,
+                        expr_arena,
+                        to_physical,
+                        Some(input_schema_right.as_ref()),
+                    )?);
 
-                let (join_columns_left, join_columns_right) = if swapped {
-                    (join_columns_right, join_columns_left)
-                } else {
-                    (join_columns_left, join_columns_right)
-                };
+                    let swapped = swap_join_order(options);
 
-                Box::new(GenericBuild::new(
-                    Arc::from(options.suffix.as_ref()),
-                    join_type.clone(),
-                    swapped,
-                    join_columns_left,
-                    join_columns_right,
-                ))
+                    let (join_columns_left, join_columns_right) = if swapped {
+                        (join_columns_right, join_columns_left)
+                    } else {
+                        (join_columns_left, join_columns_right)
+                    };
+
+                    Box::new(GenericBuild::new(
+                        Arc::from(options.suffix.as_ref()),
+                        join_type.clone(),
+                        swapped,
+                        join_columns_left,
+                        join_columns_right,
+                    ))
+                }
+                _ => unimplemented!(),
             }
-            _ => unimplemented!(),
-        },
+        }
         Slice { offset, len, .. } => {
             let slice = SliceSink::new(*offset as u64, *len as usize);
             Box::new(slice) as Box<dyn Sink>
@@ -223,7 +241,7 @@ where
             }
         }
         lp => {
-            panic!("{:?} not implemented", lp)
+            panic!("{lp:?} not implemented")
         }
     };
     Ok(out)
@@ -278,7 +296,7 @@ where
         }
 
         lp => {
-            panic!("operator {:?} not (yet) supported", lp)
+            panic!("operator {lp:?} not (yet) supported")
         }
     };
     Ok(op)
@@ -345,7 +363,7 @@ where
                 Box::new(sources::UnionSource::new(sources)) as Box<dyn Source>
             }
             lp => {
-                panic!("source {:?} not (yet) supported", lp)
+                panic!("source {lp:?} not (yet) supported")
             }
         };
         source_objects.push(src)

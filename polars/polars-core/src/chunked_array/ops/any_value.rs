@@ -101,7 +101,7 @@ pub(crate) unsafe fn arr_to_any_value<'a>(
         }
         #[cfg(feature = "object")]
         DataType::Object(_) => panic!("should not be here"),
-        dt => panic!("not implemented for {:?}", dt),
+        dt => panic!("not implemented for {dt:?}"),
     }
 }
 
@@ -112,10 +112,16 @@ impl<'a> AnyValue<'a> {
             AnyValue::Struct(idx, arr, flds) => {
                 let idx = *idx;
                 unsafe {
-                    arr.values()
-                        .iter()
-                        .zip(*flds)
-                        .map(move |(arr, fld)| arr_to_any_value(&**arr, idx, fld.data_type()))
+                    arr.values().iter().zip(*flds).map(move |(arr, fld)| {
+                        // TODO! this is hacky. Investigate if we only should put physical types
+                        // into structs
+                        if let Some(arr) = arr.as_any().downcast_ref::<DictionaryArray<u32>>() {
+                            let keys = arr.keys();
+                            arr_to_any_value(keys, idx, fld.data_type())
+                        } else {
+                            arr_to_any_value(&**arr, idx, fld.data_type())
+                        }
+                    })
                 }
             }
             _ => unreachable!(),
@@ -142,10 +148,14 @@ macro_rules! get_any_value {
     ($self:ident, $index:expr) => {{
         let (chunk_idx, idx) = $self.index_to_chunked_index($index);
         let arr = &*$self.chunks[chunk_idx];
-        assert!(idx < arr.len());
-        // SAFETY
-        // bounds are checked
-        unsafe { arr_to_any_value(arr, idx, $self.dtype()) }
+
+        if idx < arr.len() {
+            // SAFETY
+            // bounds are checked
+            Ok(unsafe { arr_to_any_value(arr, idx, $self.dtype()) })
+        } else {
+            Err(PolarsError::ComputeError("index is out of bounds".into()))
+        }
     }};
 }
 
@@ -158,7 +168,7 @@ where
         get_any_value_unchecked!(self, index)
     }
 
-    fn get_any_value(&self, index: usize) -> AnyValue {
+    fn get_any_value(&self, index: usize) -> PolarsResult<AnyValue> {
         get_any_value!(self, index)
     }
 }
@@ -169,7 +179,7 @@ impl ChunkAnyValue for BooleanChunked {
         get_any_value_unchecked!(self, index)
     }
 
-    fn get_any_value(&self, index: usize) -> AnyValue {
+    fn get_any_value(&self, index: usize) -> PolarsResult<AnyValue> {
         get_any_value!(self, index)
     }
 }
@@ -180,7 +190,7 @@ impl ChunkAnyValue for Utf8Chunked {
         get_any_value_unchecked!(self, index)
     }
 
-    fn get_any_value(&self, index: usize) -> AnyValue {
+    fn get_any_value(&self, index: usize) -> PolarsResult<AnyValue> {
         get_any_value!(self, index)
     }
 }
@@ -192,7 +202,7 @@ impl ChunkAnyValue for BinaryChunked {
         get_any_value_unchecked!(self, index)
     }
 
-    fn get_any_value(&self, index: usize) -> AnyValue {
+    fn get_any_value(&self, index: usize) -> PolarsResult<AnyValue> {
         get_any_value!(self, index)
     }
 }
@@ -203,7 +213,7 @@ impl ChunkAnyValue for ListChunked {
         get_any_value_unchecked!(self, index)
     }
 
-    fn get_any_value(&self, index: usize) -> AnyValue {
+    fn get_any_value(&self, index: usize) -> PolarsResult<AnyValue> {
         get_any_value!(self, index)
     }
 }
@@ -218,10 +228,10 @@ impl<T: PolarsObject> ChunkAnyValue for ObjectChunked<T> {
         }
     }
 
-    fn get_any_value(&self, index: usize) -> AnyValue {
+    fn get_any_value(&self, index: usize) -> PolarsResult<AnyValue> {
         match self.get_object(index) {
-            None => AnyValue::Null,
-            Some(v) => AnyValue::Object(v),
+            None => Err(PolarsError::ComputeError("index is out of bounds".into())),
+            Some(v) => Ok(AnyValue::Object(v)),
         }
     }
 }

@@ -265,8 +265,7 @@ def test_cast_inner() -> None:
     # this creates an inner null type
     df = pl.from_pandas(pd.DataFrame(data=[[[]], [[]]], columns=["A"]))
     assert (
-        df["A"].cast(pl.List(int)).dtype.inner  # type: ignore[arg-type, attr-defined]
-        == pl.Int64
+        df["A"].cast(pl.List(int)).dtype.inner == pl.Int64  # type: ignore[attr-defined]
     )
 
 
@@ -564,3 +563,12 @@ def test_empty_eval_dtype_5546() -> None:
 def test_fast_explode_flag() -> None:
     df1 = pl.DataFrame({"values": [[[1, 2]]]})
     assert df1.clone().vstack(df1)["values"].flags["FAST_EXPLODE"]
+
+
+def test_list_amortized_apply_explode_5812() -> None:
+    s = pl.Series([None, [1, 3], [0, -3], [1, 2, 2]])
+    assert s.arr.sum().to_list() == [None, 4, -3, 5]
+    assert s.arr.min().to_list() == [None, 1, -3, 1]
+    assert s.arr.max().to_list() == [None, 3, 0, 2]
+    assert s.arr.arg_min().to_list() == [None, 0, 1, 0]
+    assert s.arr.arg_max().to_list() == [None, 1, 0, 1]

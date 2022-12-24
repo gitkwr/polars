@@ -1,6 +1,6 @@
 [package]
 name = "py-polars"
-version = "0.15.3"
+version = "0.15.8"
 authors = ["ritchie46 <ritchie46@gmail.com>"]
 documentation = "https://pola-rs.github.io/polars/py-polars/html/reference/index.html"
 edition = "2021"
@@ -90,9 +90,6 @@ all = [
   "pivot",
   "top_k",
   "build_info",
-  # we need to add this, as maturin fails if we don't
-  # remove this once polars-algo is released
-  "polars/algo",
   "cse",
   "propagate_nans",
   "polars/groupby_list",
@@ -163,9 +160,6 @@ features = [
   "arg_where",
   "date_offset",
 ]
-
-[patch.crates-io]
-cmake = { git = "https://github.com/messense/cmake-rs.git", branch = "cross-compile" }
 
 [lib]
 name = "polars"

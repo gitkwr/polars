@@ -170,7 +170,7 @@ class DataFrame:
     Notice that the dtype is automatically inferred as a polars Int64:
 
     >>> df.dtypes
-    [<class 'polars.datatypes.Int64'>, <class 'polars.datatypes.Int64'>]
+    [Int64, Int64]
 
     In order to specify dtypes for your columns, initialize the DataFrame with a list
     of typed Series:
@@ -944,7 +944,7 @@ class DataFrame:
         ...     }
         ... )
         >>> df.dtypes
-        [<class 'polars.datatypes.Int64'>, <class 'polars.datatypes.Float64'>, <class 'polars.datatypes.Utf8'>]
+        [Int64, Float64, Utf8]
         >>> df
         shape: (3, 3)
         ┌─────┬─────┬─────┐
@@ -981,7 +981,7 @@ class DataFrame:
         ...     }
         ... )
         >>> df.schema
-        {'foo': <class 'polars.datatypes.Int64'>, 'bar': <class 'polars.datatypes.Float64'>, 'ham': <class 'polars.datatypes.Utf8'>}
+        {'foo': Int64, 'bar': Float64, 'ham': Utf8}
 
         """  # noqa: E501
         return dict(zip(self.columns, self.dtypes))
@@ -1497,6 +1497,36 @@ class DataFrame:
                 from_series=from_series,
             ).render()
         )
+
+    def item(self) -> Any:
+        """
+        Return the dataframe as a scalar.
+
+        Equivalent to ``df[0,0]``, with a check that the shape is (1,1).
+
+        Examples
+        --------
+        >>> df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+        >>> result = df.select((pl.col("a") * pl.col("b")).sum())
+        >>> result
+        shape: (1, 1)
+        ┌─────┐
+        │ a   │
+        │ --- │
+        │ i64 │
+        ╞═════╡
+        │ 32  │
+        └─────┘
+        >>> result.item()
+        32
+
+        """
+        if self.shape != (1, 1):
+            raise ValueError(
+                f"Can only call .item() if the dataframe is of shape (1,1), "
+                f"dataframe is of shape {self.shape}"
+            )
+        return self[0, 0]
 
     def to_arrow(self) -> pa.Table:
         """
@@ -2651,25 +2681,25 @@ class DataFrame:
         ... )
         >>> df.describe()
         shape: (7, 7)
-        ┌────────────┬──────────┬──────────┬──────┬──────┬──────┬────────────┐
-        │ describe   ┆ a        ┆ b        ┆ c    ┆ d    ┆ e    ┆ f          │
-        │ ---        ┆ ---      ┆ ---      ┆ ---  ┆ ---  ┆ ---  ┆ ---        │
-        │ str        ┆ f64      ┆ f64      ┆ f64  ┆ str  ┆ str  ┆ str        │
-        ╞════════════╪══════════╪══════════╪══════╪══════╪══════╪════════════╡
-        │ count      ┆ 3.0      ┆ 3.0      ┆ 3.0  ┆ 3    ┆ 3    ┆ 3          │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
-        │ null_count ┆ 0.0      ┆ 1.0      ┆ 0.0  ┆ 1    ┆ 1    ┆ 0          │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
-        │ mean       ┆ 2.266667 ┆ 4.5      ┆ null ┆ null ┆ null ┆ null       │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
-        │ std        ┆ 1.101514 ┆ 0.707107 ┆ null ┆ null ┆ null ┆ null       │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
-        │ min        ┆ 1.0      ┆ 4.0      ┆ 0.0  ┆ b    ┆ eur  ┆ 2020-01-01 │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
-        │ max        ┆ 3.0      ┆ 5.0      ┆ 1.0  ┆ c    ┆ usd  ┆ 2022-01-01 │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
-        │ median     ┆ 2.8      ┆ 4.5      ┆ null ┆ null ┆ null ┆ null       │
-        └────────────┴──────────┴──────────┴──────┴──────┴──────┴────────────┘
+        ┌────────────┬──────────┬──────────┬──────────┬──────┬──────┬────────────┐
+        │ describe   ┆ a        ┆ b        ┆ c        ┆ d    ┆ e    ┆ f          │
+        │ ---        ┆ ---      ┆ ---      ┆ ---      ┆ ---  ┆ ---  ┆ ---        │
+        │ str        ┆ f64      ┆ f64      ┆ f64      ┆ str  ┆ str  ┆ str        │
+        ╞════════════╪══════════╪══════════╪══════════╪══════╪══════╪════════════╡
+        │ count      ┆ 3.0      ┆ 3.0      ┆ 3.0      ┆ 3    ┆ 3    ┆ 3          │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
+        │ null_count ┆ 0.0      ┆ 1.0      ┆ 0.0      ┆ 1    ┆ 1    ┆ 0          │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
+        │ mean       ┆ 2.266667 ┆ 4.5      ┆ 0.666667 ┆ null ┆ null ┆ null       │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
+        │ std        ┆ 1.101514 ┆ 0.707107 ┆ 0.57735  ┆ null ┆ null ┆ null       │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
+        │ min        ┆ 1.0      ┆ 4.0      ┆ 0.0      ┆ b    ┆ eur  ┆ 2020-01-01 │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
+        │ max        ┆ 3.0      ┆ 5.0      ┆ 1.0      ┆ c    ┆ usd  ┆ 2022-01-01 │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
+        │ median     ┆ 2.8      ┆ 4.5      ┆ 1.0      ┆ null ┆ null ┆ null       │
+        └────────────┴──────────┴──────────┴──────────┴──────┴──────┴────────────┘
 
         """
 
@@ -5606,7 +5636,7 @@ class DataFrame:
         ┌─────────┐
         │ literal │
         │ ---     │
-        │ i64     │
+        │ i32     │
         ╞═════════╡
         │ 0       │
         ├╌╌╌╌╌╌╌╌╌┤
@@ -5950,64 +5980,26 @@ class DataFrame:
         ...         "foo": [1, 2, 3],
         ...         "bar": [6, 7, 8],
         ...         "ham": ["a", "b", "c"],
+        ...         "spam": [True, False, None],
         ...     }
         ... )
         >>> df.mean()
-        shape: (1, 3)
-        ┌─────┬─────┬──────┐
-        │ foo ┆ bar ┆ ham  │
-        │ --- ┆ --- ┆ ---  │
-        │ f64 ┆ f64 ┆ str  │
-        ╞═════╪═════╪══════╡
-        │ 2.0 ┆ 7.0 ┆ null │
-        └─────┴─────┴──────┘
-
-        Note: a PanicException is raised with axis = 1 and a string column.
-
-        >>> df = pl.DataFrame(
-        ...     {
-        ...         "foo": [1, 2, 3],
-        ...         "bar": [6, 7, 8],
-        ...     }
-        ... )
+        shape: (1, 4)
+        ┌─────┬─────┬──────┬──────┐
+        │ foo ┆ bar ┆ ham  ┆ spam │
+        │ --- ┆ --- ┆ ---  ┆ ---  │
+        │ f64 ┆ f64 ┆ str  ┆ f64  │
+        ╞═════╪═════╪══════╪══════╡
+        │ 2.0 ┆ 7.0 ┆ null ┆ 0.5  │
+        └─────┴─────┴──────┴──────┘
         >>> df.mean(axis=1)
         shape: (3,)
         Series: 'foo' [f64]
         [
-                3.5
-                4.5
-                5.5
+            2.666667
+            3.0
+            5.5
         ]
-
-        Note: the mean of booleans evaluates to null.
-
-        >>> df = pl.DataFrame(
-        ...     {
-        ...         "a": [True, True, False],
-        ...         "b": [True, True, True],
-        ...     }
-        ... )
-        >>> df.mean()
-        shape: (1, 2)
-        ┌──────┬──────┐
-        │ a    ┆ b    │
-        │ ---  ┆ ---  │
-        │ bool ┆ bool │
-        ╞══════╪══════╡
-        │ null ┆ null │
-        └──────┴──────┘
-
-        Instead, cast to numeric type:
-
-        >>> df.select(pl.all().cast(pl.UInt8)).mean()
-        shape: (1, 2)
-        ┌──────────┬─────┐
-        │ a        ┆ b   │
-        │ ---      ┆ --- │
-        │ f64      ┆ f64 │
-        ╞══════════╪═════╡
-        │ 0.666667 ┆ 1.0 │
-        └──────────┴─────┘
 
         """
         if axis == 0:

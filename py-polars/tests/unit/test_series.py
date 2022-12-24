@@ -1534,7 +1534,7 @@ def test_comparisons_bool_series_to_int() -> None:
     # todo: do we want this to work?
     assert_series_equal(srs_bool / 1, pl.Series([True, False], dtype=Float64))
     match = (
-        r"cannot do arithmetic with series of dtype: <class 'polars.datatypes.Boolean'>"
+        r"cannot do arithmetic with series of dtype: Boolean"
         r" and argument of type: <class 'bool'>"
     )
     with pytest.raises(ValueError, match=match):
@@ -1542,7 +1542,7 @@ def test_comparisons_bool_series_to_int() -> None:
     with pytest.raises(ValueError, match=match):
         srs_bool + 1
     match = (
-        r"cannot do arithmetic with series of dtype: <class 'polars.datatypes.Boolean'>"
+        r"cannot do arithmetic with series of dtype: Boolean"
         r" and argument of type: <class 'bool'>"
     )
     with pytest.raises(ValueError, match=match):
@@ -2473,3 +2473,16 @@ def test_get_chunks() -> None:
     chunks = pl.concat([a, b], rechunk=False).get_chunks()
     assert chunks[0].series_equal(a)
     assert chunks[1].series_equal(b)
+
+
+def test_item() -> None:
+    s = pl.Series("a", [1])
+    assert s.item() == 1
+
+    with pytest.raises(ValueError):
+        s = pl.Series("a", [1, 2])
+        s.item()
+
+    with pytest.raises(ValueError):
+        s = pl.Series("a", [])
+        s.item()

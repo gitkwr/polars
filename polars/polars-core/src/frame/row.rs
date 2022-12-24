@@ -19,22 +19,24 @@ impl<'a> Row<'a> {
 impl DataFrame {
     /// Get a row from a DataFrame. Use of this is discouraged as it will likely be slow.
     #[cfg_attr(docsrs, doc(cfg(feature = "rows")))]
-    pub fn get_row(&self, idx: usize) -> Row {
-        let values = self.columns.iter().map(|s| s.get(idx)).collect::<Vec<_>>();
-        Row(values)
+    pub fn get_row(&self, idx: usize) -> PolarsResult<Row> {
+        let values = self
+            .columns
+            .iter()
+            .map(|s| s.get(idx))
+            .collect::<PolarsResult<Vec<_>>>()?;
+        Ok(Row(values))
     }
 
     /// Amortize allocations by reusing a row.
     /// The caller is responsible to make sure that the row has at least the capacity for the number
     /// of columns in the DataFrame
     #[cfg_attr(docsrs, doc(cfg(feature = "rows")))]
-    pub fn get_row_amortized<'a>(&'a self, idx: usize, row: &mut Row<'a>) {
-        self.columns
-            .iter()
-            .zip(&mut row.0)
-            .for_each(|(s, any_val)| {
-                *any_val = s.get(idx);
-            });
+    pub fn get_row_amortized<'a>(&'a self, idx: usize, row: &mut Row<'a>) -> PolarsResult<()> {
+        for (s, any_val) in self.columns.iter().zip(&mut row.0) {
+            *any_val = s.get(idx)?;
+        }
+        Ok(())
     }
 
     /// Amortize allocations by reusing a row.
@@ -317,7 +319,7 @@ pub fn rows_to_schema_supertypes(
         .enumerate()
         .map(|(i, types_set)| {
             let dtype = types_set_to_dtype(types_set)?;
-            Ok(Field::new(format!("column_{}", i).as_ref(), dtype))
+            Ok(Field::new(format!("column_{i}").as_ref(), dtype))
         })
         .collect::<PolarsResult<_>>()
 }
@@ -373,7 +375,7 @@ impl From<&Row<'_>> for Schema {
     fn from(row: &Row) -> Self {
         let fields = row.0.iter().enumerate().map(|(i, av)| {
             let dtype = av.into();
-            Field::new(format!("column_{}", i).as_ref(), dtype)
+            Field::new(format!("column_{i}").as_ref(), dtype)
         });
 
         Schema::from(fields)
@@ -459,8 +461,8 @@ impl<'a> AnyValueBuffer<'a> {
 
             // dynamic types
             (Utf8(builder), av) => match av {
-                AnyValue::Int64(v) => builder.append_value(&format!("{}", v)),
-                AnyValue::Float64(v) => builder.append_value(&format!("{}", v)),
+                AnyValue::Int64(v) => builder.append_value(&format!("{v}")),
+                AnyValue::Float64(v) => builder.append_value(&format!("{v}")),
                 AnyValue::Boolean(true) => builder.append_value("true"),
                 AnyValue::Boolean(false) => builder.append_value("false"),
                 _ => return None,
@@ -472,8 +474,8 @@ impl<'a> AnyValueBuffer<'a> {
 
     pub(crate) fn add_fallible(&mut self, val: &AnyValue<'a>) -> PolarsResult<()> {
         self.add(val.clone()).ok_or_else(|| {
-            PolarsError::ComputeError(format!("Could not append {:?} to builder; make sure that all rows have the same schema.\n\
-            Or consider increasing the the 'schema_inference_length' argument.", val).into())
+            PolarsError::ComputeError(format!("Could not append {val:?} to builder; make sure that all rows have the same schema.\n\
+            Or consider increasing the the 'schema_inference_length' argument.").into())
         })
     }
 
@@ -535,6 +537,18 @@ impl From<(&DataType, usize)> for AnyValueBuffer<'_> {
     }
 }
 
+#[inline]
+unsafe fn add_value<T: NumericNative>(
+    values_buf_ptr: usize,
+    col_idx: usize,
+    row_idx: usize,
+    value: T,
+) {
+    let column = (*(values_buf_ptr as *mut Vec<Vec<T>>)).get_unchecked_mut(col_idx);
+    let el_ptr = column.as_mut_ptr();
+    *el_ptr.add(row_idx) = value;
+}
+
 fn numeric_transpose<T>(cols: &[Series]) -> PolarsResult<DataFrame>
 where
     T: PolarsNumericType,
@@ -576,12 +590,13 @@ where
                                 .get_unchecked_mut(col_idx);
                             let el_ptr = column.as_mut_ptr();
                             *el_ptr.add(row_idx) = false;
+                            // we must initialize this memory otherwise downstream code
+                            // might access uninitialized memory when the masked out values
+                            // are changed.
+                            add_value(values_buf_ptr, col_idx, row_idx, T::Native::default());
                         },
                         Some(v) => unsafe {
-                            let column = (*(values_buf_ptr as *mut Vec<Vec<T::Native>>))
-                                .get_unchecked_mut(col_idx);
-                            let el_ptr = column.as_mut_ptr();
-                            *el_ptr.add(row_idx) = v;
+                            add_value(values_buf_ptr, col_idx, row_idx, v);
                         },
                     }
                 }
@@ -621,12 +636,12 @@ where
                     None
                 };
 
-                let arr = PrimitiveArray::<T::Native>::from_data(
+                let arr = PrimitiveArray::<T::Native>::new(
                     T::get_dtype().to_arrow(),
                     values.into(),
                     validity,
                 );
-                let name = format!("column_{}", i);
+                let name = format!("column_{i}");
                 ChunkedArray::<T>::from_chunks(&name, vec![Box::new(arr) as ArrayRef]).into_series()
             })
             .collect()

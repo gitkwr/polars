@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::io::BufWriter;
+use std::path::PathBuf;
 
 use polars::io::RowCount;
 #[cfg(feature = "csv-file")]
@@ -124,7 +125,7 @@ impl PyLazyFrame {
     pub fn write_json(&self, py_f: PyObject) -> PyResult<()> {
         let file = BufWriter::new(get_file_like(py_f, true)?);
         serde_json::to_writer(file, &self.ldf.logical_plan)
-            .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?;
+            .map_err(|err| PyValueError::new_err(format!("{err:?}")))?;
         Ok(())
     }
 
@@ -147,7 +148,7 @@ impl PyLazyFrame {
         let json = unsafe { std::mem::transmute::<&'_ str, &'static str>(json.as_str()) };
 
         let lp = serde_json::from_str::<LogicalPlan>(json)
-            .map_err(|err| PyValueError::new_err(format!("{:?}", err)))?;
+            .map_err(|err| PyValueError::new_err(format!("{err:?}")))?;
         Ok(LazyFrame::from(lp).into())
     }
 
@@ -416,6 +417,37 @@ impl PyLazyFrame {
             ldf.collect().map_err(PyPolarsErr::from)
         })?;
         Ok(df.into())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn sink_parquet(
+        &self,
+        py: Python,
+        path: PathBuf,
+        compression: &str,
+        compression_level: Option<i32>,
+        statistics: bool,
+        row_group_size: Option<usize>,
+        data_pagesize_limit: Option<usize>,
+        maintain_order: bool,
+    ) -> PyResult<()> {
+        let compression = parse_parquet_compression(compression, compression_level)?;
+
+        let options = ParquetWriteOptions {
+            compression,
+            statistics,
+            row_group_size,
+            data_pagesize_limit,
+            maintain_order,
+        };
+
+        // if we don't allow threads and we have udfs trying to acquire the gil from different
+        // threads we deadlock.
+        py.allow_threads(|| {
+            let ldf = self.ldf.clone();
+            ldf.sink_parquet(path, options).map_err(PyPolarsErr::from)
+        })?;
+        Ok(())
     }
 
     pub fn fetch(&self, py: Python, n_rows: usize) -> PyResult<PyDataFrame> {
@@ -777,8 +809,7 @@ impl PyLazyFrame {
                         let pytype = result_df_wrapper.as_ref(py).get_type();
                         return Err(PolarsError::ComputeError(
                             format!(
-                                "Expected 'LazyFrame.map' to return a 'DataFrame', got a {}",
-                                pytype
+                                "Expected 'LazyFrame.map' to return a 'DataFrame', got a {pytype}",
                             )
                             .into(),
                         ));
@@ -794,8 +825,8 @@ impl PyLazyFrame {
                     let output_schema = df.schema();
                     if expected_schema.as_ref() != &output_schema {
                         return Err(PolarsError::ComputeError(
-                            format!("The output schema of 'LazyFrame.map' is incorrect. Expected: {:?}\n\
-                        Got: {:?}", expected_schema, output_schema).into()
+                            format!("The output schema of 'LazyFrame.map' is incorrect. Expected: {expected_schema:?}\n\
+                        Got: {output_schema:?}").into()
                         ));
                     }
                 }
