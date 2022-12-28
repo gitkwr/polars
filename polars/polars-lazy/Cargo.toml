@@ -34,6 +34,13 @@ compile = ["polars-plan/compile"]
 streaming = ["chunked_ids", "polars-pipe/compile", "polars-plan/streaming"]
 default = ["compile", "private"]
 parquet = ["polars-core/parquet", "polars-io/parquet", "polars-plan/parquet", "polars-pipe/parquet"]
+parquet-async = [
+  "parquet",
+  "polars-plan/parquet-async",
+  "polars-io/parquet-async",
+  "polars-pipe/parquet-async",
+  "streaming",
+]
 ipc = ["polars-io/ipc", "polars-plan/ipc"]
 json = ["polars-io/json", "polars-plan/json"]
 csv-file = ["polars-io/csv-file", "polars-plan/csv-file", "polars-pipe/csv-file"]
@@ -99,6 +106,7 @@ row_hash = ["polars-plan/row_hash"]
 string_justify = ["polars-plan/string_justify"]
 arg_where = ["polars-plan/arg_where"]
 search_sorted = ["polars-plan/search_sorted"]
+merge_sorted = ["polars-plan/merge_sorted"]
 meta = ["polars-plan/meta"]
 pivot = ["polars-core/rows", "polars-ops/pivot"]
 top_k = ["polars-plan/top_k"]

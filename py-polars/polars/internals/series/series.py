@@ -64,6 +64,7 @@ from polars.internals.construction import (
     sequence_to_pyseries,
     series_to_pyseries,
 )
+from polars.internals.series.binary import BinaryNameSpace
 from polars.internals.series.categorical import CatNameSpace
 from polars.internals.series.datetime import DateTimeNameSpace
 from polars.internals.series.list import ListNameSpace
@@ -191,7 +192,7 @@ class Series:
     """
 
     _s: PySeries = None
-    _accessors: set[str] = {"arr", "cat", "dt", "str", "struct"}
+    _accessors: set[str] = {"arr", "cat", "dt", "str", "bin", "struct"}
 
     def __init__(
         self,
@@ -2139,6 +2140,18 @@ class Series:
 
         """
         return self.len() == 0
+
+    def is_sorted(self, reverse: bool = False) -> bool:
+        """
+        Check if the Series is sorted.
+
+        Parameters
+        ----------
+        reverse
+            Check if the Series is sorted in descending order
+
+        """
+        return self._s.is_sorted(reverse)
 
     def is_null(self) -> Series:
         """
@@ -4804,7 +4817,7 @@ class Series:
         3
 
         """
-        return wrap_s(self._s.set_sorted(reverse))
+        return wrap_s(self._s.set_sorted_flag(reverse))
 
     def new_from_index(self, index: int, length: int) -> pli.Series:
         """Create a new Series filled with values from the given index."""
@@ -4844,6 +4857,11 @@ class Series:
     def str(self) -> StringNameSpace:
         """Create an object namespace of all string related methods."""
         return StringNameSpace(self)
+
+    @accessor
+    def bin(self) -> BinaryNameSpace:
+        """Create an object namespace of all binary related methods."""
+        return BinaryNameSpace(self)
 
     @accessor
     def struct(self) -> StructNameSpace:

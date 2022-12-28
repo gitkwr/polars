@@ -3,6 +3,8 @@
 pub mod cat;
 #[cfg(feature = "dtype-categorical")]
 pub use cat::*;
+#[cfg(feature = "dtype-binary")]
+pub mod binary;
 #[cfg(feature = "temporal")]
 mod dt;
 mod expr;
@@ -2223,10 +2225,10 @@ impl Expr {
     /// # Warning
     /// This can lead to incorrect results if this `Series` is not sorted!!
     /// Use with care!
-    pub fn set_sorted(self, sorted: IsSorted) -> Expr {
+    pub fn set_sorted_flag(self, sorted: IsSorted) -> Expr {
         self.apply(
             move |mut s| {
-                s.set_sorted(sorted);
+                s.set_sorted_flag(sorted);
                 Ok(s)
             },
             GetOutput::same_type(),
@@ -2242,6 +2244,11 @@ impl Expr {
     #[cfg(feature = "strings")]
     pub fn str(self) -> string::StringNameSpace {
         string::StringNameSpace(self)
+    }
+
+    #[cfg(feature = "dtype-binary")]
+    pub fn binary(self) -> binary::BinaryNameSpace {
+        binary::BinaryNameSpace(self)
     }
 
     #[cfg(feature = "temporal")]
