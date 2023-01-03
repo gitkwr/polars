@@ -42,6 +42,7 @@ def test_cum_agg() -> None:
 
 
 def test_init_inputs(monkeypatch: Any) -> None:
+    nan = float("nan")
     for flag in [False, True]:
         monkeypatch.setattr(pl.internals.construction, "_PYARROW_AVAILABLE", flag)
         # Good inputs
@@ -71,11 +72,34 @@ def test_init_inputs(monkeypatch: Any) -> None:
         )
         assert pl.Series("a", [10000, 20000, 30000], dtype=pl.Time).dtype == pl.Time
 
-        # 2d numpy array
-        res = pl.Series(name="a", values=np.array([[1, 2], [3, 4]], dtype=np.int64))
-        assert res.dtype == pl.List(pl.Int64)
-        assert res[0].to_list() == [1, 2]
-        assert res[1].to_list() == [3, 4]
+        # 2d numpy array and/or list of 1d numpy arrays
+        for res in (
+            pl.Series(
+                name="a",
+                values=np.array([[1, 2], [3, nan]], dtype=np.float32),
+                nan_to_null=True,
+            ),
+            pl.Series(
+                name="a",
+                values=[
+                    np.array([1, 2], dtype=np.float32),
+                    np.array([3, nan], dtype=np.float32),
+                ],
+                nan_to_null=True,
+            ),
+            pl.Series(
+                name="a",
+                values=(
+                    np.ndarray((2,), np.float32, np.array([1, 2], dtype=np.float32)),
+                    np.ndarray((2,), np.float32, np.array([3, nan], dtype=np.float32)),
+                ),
+                nan_to_null=True,
+            ),
+        ):
+            assert res.dtype == pl.List(pl.Float32)
+            assert res[0].to_list() == [1.0, 2.0]
+            assert res[1].to_list() == [3.0, None]
+
         assert pl.Series(
             values=np.array([["foo", "bar"], ["foo2", "bar2"]])
         ).dtype == pl.List(pl.Utf8)
@@ -1802,16 +1826,6 @@ def test_str_to_uppercase() -> None:
     verify_series_and_expr_api(s, expected, "str.to_uppercase")
 
 
-def test_str_rstrip() -> None:
-    s = pl.Series([" hello ", "world\t "])
-    expected = pl.Series([" hello", "world"])
-    assert_series_equal(s.str.rstrip(), expected)
-
-    s = pl.Series([" hello ", "world\t "])
-    expected = pl.Series([" hell", "world"])
-    assert_series_equal(s.str.rstrip().str.rstrip("o"), expected)
-
-
 def test_str_strip() -> None:
     s = pl.Series([" hello ", "world\t "])
     expected = pl.Series(["hello", "world"])
@@ -1820,13 +1834,45 @@ def test_str_strip() -> None:
     expected = pl.Series(["hello", "worl"])
     assert_series_equal(s.str.strip().str.strip("d"), expected)
 
+    expected = pl.Series(["ell", "rld\t"])
+    assert_series_equal(s.str.strip(" hwo"), expected)
+
 
 def test_str_lstrip() -> None:
     s = pl.Series([" hello ", "\t world"])
     expected = pl.Series(["hello ", "world"])
     assert_series_equal(s.str.lstrip(), expected)
+
     expected = pl.Series(["ello ", "world"])
     assert_series_equal(s.str.lstrip().str.lstrip("h"), expected)
+
+    expected = pl.Series(["ello ", "\t world"])
+    assert_series_equal(s.str.lstrip("hw "), expected)
+
+
+def test_str_rstrip() -> None:
+    s = pl.Series([" hello ", "world\t "])
+    expected = pl.Series([" hello", "world"])
+    assert_series_equal(s.str.rstrip(), expected)
+
+    expected = pl.Series([" hell", "world"])
+    assert_series_equal(s.str.rstrip().str.rstrip("o"), expected)
+
+    expected = pl.Series([" he", "wor"])
+    assert_series_equal(s.str.rstrip("odl \t"), expected)
+
+
+def test_str_strip_whitespace() -> None:
+    a = pl.Series("a", ["trailing  ", "  leading", "  both  "])
+
+    expected = pl.Series("a", ["trailing", "  leading", "  both"])
+    verify_series_and_expr_api(a, expected, "str.rstrip")
+
+    expected = pl.Series("a", ["trailing  ", "leading", "both  "])
+    verify_series_and_expr_api(a, expected, "str.lstrip")
+
+    expected = pl.Series("a", ["trailing", "leading", "both"])
+    verify_series_and_expr_api(a, expected, "str.strip")
 
 
 def test_str_strptime() -> None:
@@ -2004,6 +2050,7 @@ def test_to_physical() -> None:
     verify_series_and_expr_api(a, expected, "to_physical")
 
 
+@pytest.mark.filterwarnings("ignore::FutureWarning")
 def test_is_between_datetime() -> None:
     s = pl.Series("a", [datetime(2020, 1, 1, 10, 0, 0), datetime(2020, 1, 1, 20, 0, 0)])
     start = datetime(2020, 1, 1, 12, 0, 0)
@@ -2209,16 +2256,6 @@ def test_product() -> None:
     a = pl.Series("a", [None, 2, 3])
     out = a.product()
     assert out is None
-
-
-def test_strip() -> None:
-    a = pl.Series("a", ["trailing  ", "  leading", "  both  "])
-    expected = pl.Series("a", ["trailing", "  leading", "  both"])
-    verify_series_and_expr_api(a, expected, "str.rstrip")
-    expected = pl.Series("a", ["trailing  ", "leading", "both  "])
-    verify_series_and_expr_api(a, expected, "str.lstrip")
-    expected = pl.Series("a", ["trailing", "leading", "both"])
-    verify_series_and_expr_api(a, expected, "str.strip")
 
 
 def test_ceil() -> None:

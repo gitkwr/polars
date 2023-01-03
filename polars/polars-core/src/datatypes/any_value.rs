@@ -1,7 +1,20 @@
 use arrow::types::PrimitiveType;
+#[cfg(feature = "dtype-categorical")]
+use polars_utils::sync::SyncPtr;
 use polars_utils::unwrap::UnwrapUncheckedRelease;
 
 use super::*;
+
+#[cfg(feature = "object")]
+#[derive(Debug)]
+pub struct OwnedObject(pub Box<dyn PolarsObjectSafe>);
+
+#[cfg(feature = "object")]
+impl Clone for OwnedObject {
+    fn clone(&self) -> Self {
+        Self(self.0.to_boxed())
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum AnyValue<'a> {
@@ -45,12 +58,17 @@ pub enum AnyValue<'a> {
     #[cfg(feature = "dtype-time")]
     Time(i64),
     #[cfg(feature = "dtype-categorical")]
-    Categorical(u32, &'a RevMapping),
+    // If syncptr is_null the data is in the rev-map
+    // otherwise it is in the array pointer
+    Categorical(u32, &'a RevMapping, SyncPtr<Utf8Array<i64>>),
     /// Nested type, contains arrays that are filled with one of the datetypes.
     List(Series),
     #[cfg(feature = "object")]
     /// Can be used to fmt and implements Any, so can be downcasted to the proper value type.
+    #[cfg(feature = "object")]
     Object(&'a dyn PolarsObjectSafe),
+    #[cfg(feature = "object")]
+    ObjectOwned(OwnedObject),
     #[cfg(feature = "dtype-struct")]
     // 3 pointers and thus not larger than string/vec
     Struct(usize, &'a StructArray, &'a [Field]),
@@ -343,7 +361,7 @@ impl<'a> AnyValue<'a> {
             Boolean(_) => DataType::Boolean,
             Utf8(_) => DataType::Utf8,
             #[cfg(feature = "dtype-categorical")]
-            Categorical(_, _) => DataType::Categorical(None),
+            Categorical(_, _, _) => DataType::Categorical(None),
             List(s) => DataType::List(Box::new(s.dtype().clone())),
             #[cfg(feature = "dtype-struct")]
             Struct(_, _, fields) => DataType::Struct(fields.to_vec()),
@@ -546,6 +564,8 @@ impl<'a> AnyValue<'a> {
             Binary(v) => BinaryOwned(v.to_vec()),
             #[cfg(feature = "dtype-binary")]
             BinaryOwned(v) => BinaryOwned(v),
+            #[cfg(feature = "object")]
+            Object(v) => ObjectOwned(OwnedObject(v.to_boxed())),
             dt => {
                 return Err(PolarsError::ComputeError(
                     format!("cannot get static AnyValue from {dt}").into(),
@@ -600,7 +620,7 @@ impl PartialEq for AnyValue<'_> {
             // should it?
             (Null, Null) => true,
             #[cfg(feature = "dtype-categorical")]
-            (Categorical(idx_l, rev_l), Categorical(idx_r, rev_r)) => match (rev_l, rev_r) {
+            (Categorical(idx_l, rev_l, _), Categorical(idx_r, rev_r, _)) => match (rev_l, rev_r) {
                 (RevMapping::Global(_, _, id_l), RevMapping::Global(_, _, id_r)) => {
                     id_l == id_r && idx_l == idx_r
                 }

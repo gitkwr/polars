@@ -93,11 +93,8 @@ class ExprStringNameSpace:
         │ date       │
         ╞════════════╡
         │ 2021-04-22 │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2022-01-04 │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2022-01-31 │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2001-07-08 │
         └────────────┘
 
@@ -143,11 +140,8 @@ class ExprStringNameSpace:
         │ str  ┆ u32    ┆ u32    │
         ╞══════╪════════╪════════╡
         │ Café ┆ 5      ┆ 4      │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ null ┆ null   ┆ null   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 345  ┆ 3      ┆ 3      │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 東京  ┆ 6      ┆ 2      │
         └──────┴────────┴────────┘
 
@@ -179,11 +173,8 @@ class ExprStringNameSpace:
         │ str  ┆ u32    ┆ u32    │
         ╞══════╪════════╪════════╡
         │ Café ┆ 4      ┆ 5      │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ null ┆ null   ┆ null   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 345  ┆ 3      ┆ 3      │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 東京  ┆ 2      ┆ 6      │
         └──────┴────────┴────────┘
 
@@ -234,7 +225,6 @@ class ExprStringNameSpace:
         │ str │
         ╞═════╡
         │ CAT │
-        ├╌╌╌╌╌┤
         │ DOG │
         └─────┘
 
@@ -256,99 +246,136 @@ class ExprStringNameSpace:
         │ str │
         ╞═════╡
         │ cat │
-        ├╌╌╌╌╌┤
         │ dog │
         └─────┘
 
         """
         return pli.wrap_expr(self._pyexpr.str_to_lowercase())
 
-    def strip(self, matches: None | str = None) -> pli.Expr:
-        """
-        Remove leading and trailing whitespace.
+    def strip(self, matches: str | None = None) -> pli.Expr:
+        r"""
+        Remove leading and trailing characters.
 
         Parameters
         ----------
         matches
-            An optional single character that should be trimmed
+            The set of characters to be removed. All combinations of this set of
+            characters will be stripped. If set to None (default), all whitespace is
+            removed instead.
 
         Examples
         --------
-        >>> df = pl.DataFrame({"foo": [" lead", "trail ", " both "]})
+        >>> df = pl.DataFrame({"foo": [" hello ", "\tworld"]})
         >>> df.select(pl.col("foo").str.strip())
-        shape: (3, 1)
+        shape: (2, 1)
         ┌───────┐
         │ foo   │
         │ ---   │
         │ str   │
         ╞═══════╡
-        │ lead  │
-        ├╌╌╌╌╌╌╌┤
-        │ trail │
-        ├╌╌╌╌╌╌╌┤
-        │ both  │
+        │ hello │
+        │ world │
         └───────┘
 
+        Characters can be stripped by passing a string as argument. Note that whitespace
+        will not be stripped automatically when doing so.
+
+        >>> df.select(pl.col("foo").str.strip("od\t"))
+        shape: (2, 1)
+        ┌─────────┐
+        │ foo     │
+        │ ---     │
+        │ str     │
+        ╞═════════╡
+        │  hello  │
+        │ worl    │
+        └─────────┘
+
         """
-        if matches is not None and len(matches) > 1:
-            raise ValueError("matches should contain a single character")
         return pli.wrap_expr(self._pyexpr.str_strip(matches))
 
-    def lstrip(self, matches: None | str = None) -> pli.Expr:
-        """
-        Remove leading whitespace.
+    def lstrip(self, matches: str | None = None) -> pli.Expr:
+        r"""
+        Remove leading characters.
+
+        Parameters
+        ----------
+        matches
+            The set of characters to be removed. All combinations of this set of
+            characters will be stripped. If set to None (default), all whitespace is
+            removed instead.
 
         Examples
         --------
-        >>> df = pl.DataFrame({"foo": [" lead", "trail ", " both "]})
+        >>> df = pl.DataFrame({"foo": [" hello ", "\tworld"]})
         >>> df.select(pl.col("foo").str.lstrip())
-        shape: (3, 1)
+        shape: (2, 1)
         ┌────────┐
         │ foo    │
         │ ---    │
         │ str    │
         ╞════════╡
-        │ lead   │
-        ├╌╌╌╌╌╌╌╌┤
-        │ trail  │
-        ├╌╌╌╌╌╌╌╌┤
-        │ both   │
+        │ hello  │
+        │ world  │
         └────────┘
 
+        Characters can be stripped by passing a string as argument. Note that whitespace
+        will not be stripped automatically when doing so.
+
+        >>> df.select(pl.col("foo").str.lstrip("wod\t"))
+        shape: (2, 1)
+        ┌─────────┐
+        │ foo     │
+        │ ---     │
+        │ str     │
+        ╞═════════╡
+        │  hello  │
+        │ rld     │
+        └─────────┘
+
         """
-        if matches is not None and len(matches) > 1:
-            raise ValueError("matches should contain a single character")
         return pli.wrap_expr(self._pyexpr.str_lstrip(matches))
 
-    def rstrip(self, matches: None | str = None) -> pli.Expr:
-        """
-        Remove trailing whitespace.
+    def rstrip(self, matches: str | None = None) -> pli.Expr:
+        r"""
+        Remove trailing characters.
 
         Parameters
         ----------
         matches
-            An optional single character that should be trimmed
+            The set of characters to be removed. All combinations of this set of
+            characters will be stripped. If set to None (default), all whitespace is
+            removed instead.
 
         Examples
         --------
-        >>> df = pl.DataFrame({"foo": [" lead", "trail ", " both "]})
+        >>> df = pl.DataFrame({"foo": [" hello ", "world\t"]})
         >>> df.select(pl.col("foo").str.rstrip())
-        shape: (3, 1)
-        ┌───────┐
-        │ foo   │
-        │ ---   │
-        │ str   │
-        ╞═══════╡
-        │  lead │
-        ├╌╌╌╌╌╌╌┤
-        │ trail │
-        ├╌╌╌╌╌╌╌┤
-        │  both │
-        └───────┘
+        shape: (2, 1)
+        ┌────────┐
+        │ foo    │
+        │ ---    │
+        │ str    │
+        ╞════════╡
+        │  hello │
+        │ world  │
+        └────────┘
+
+        Characters can be stripped by passing a string as argument. Note that whitespace
+        will not be stripped automatically when doing so.
+
+        >>> df.select(pl.col("foo").str.rstrip("wod\t"))
+        shape: (2, 1)
+        ┌─────────┐
+        │ foo     │
+        │ ---     │
+        │ str     │
+        ╞═════════╡
+        │  hello  │
+        │ worl    │
+        └─────────┘
 
         """
-        if matches is not None and len(matches) > 1:
-            raise ValueError("matches should contain a single character")
         return pli.wrap_expr(self._pyexpr.str_rstrip(matches))
 
     def zfill(self, alignment: int) -> pli.Expr:
@@ -382,21 +409,13 @@ class ExprStringNameSpace:
         │ str     │
         ╞═════════╡
         │ -0010   │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ -0001   │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ 00000   │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ 00001   │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ ...     │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ 10000   │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ 100000  │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ 1000000 │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ null    │
         └─────────┘
 
@@ -429,11 +448,8 @@ class ExprStringNameSpace:
         │ str          │
         ╞══════════════╡
         │ cow*****     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ monkey**     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ null         │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ hippopotamus │
         └──────────────┘
 
@@ -466,11 +482,8 @@ class ExprStringNameSpace:
         │ str          │
         ╞══════════════╡
         │ *****cow     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ **monkey     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ null         │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ hippopotamus │
         └──────────────┘
 
@@ -505,11 +518,8 @@ class ExprStringNameSpace:
         │ str         ┆ bool  ┆ bool    │
         ╞═════════════╪═══════╪═════════╡
         │ Crab        ┆ false ┆ false   │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
         │ cat and dog ┆ true  ┆ false   │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
         │ rab$bit     ┆ true  ┆ true    │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
         │ null        ┆ null  ┆ null    │
         └─────────────┴───────┴─────────┘
 
@@ -543,9 +553,7 @@ class ExprStringNameSpace:
         │ str    ┆ bool       │
         ╞════════╪════════════╡
         │ apple  ┆ false      │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ mango  ┆ true       │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ null   ┆ null       │
         └────────┴────────────┘
 
@@ -591,9 +599,7 @@ class ExprStringNameSpace:
         │ str    ┆ bool       │
         ╞════════╪════════════╡
         │ apple  ┆ true       │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ mango  ┆ false      │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ null   ┆ null       │
         └────────┴────────────┘
 
@@ -650,13 +656,9 @@ class ExprStringNameSpace:
         │ str      │
         ╞══════════╡
         │ 1        │
-        ├╌╌╌╌╌╌╌╌╌╌┤
         │ null     │
-        ├╌╌╌╌╌╌╌╌╌╌┤
         │ 2        │
-        ├╌╌╌╌╌╌╌╌╌╌┤
         │ 2.1      │
-        ├╌╌╌╌╌╌╌╌╌╌┤
         │ true     │
         └──────────┘
 
@@ -706,9 +708,7 @@ class ExprStringNameSpace:
         │ str     │
         ╞═════════╡
         │ 666f6f  │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ 626172  │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ null    │
         └─────────┘
 
@@ -762,9 +762,7 @@ class ExprStringNameSpace:
         │ str     │
         ╞═════════╡
         │ messi   │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ null    │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ ronaldo │
         └─────────┘
 
@@ -803,7 +801,6 @@ class ExprStringNameSpace:
         │ list[str]      │
         ╞════════════════╡
         │ ["123", "45"]  │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ ["678", "910"] │
         └────────────────┘
 
@@ -839,7 +836,6 @@ class ExprStringNameSpace:
         │ u32          │
         ╞══════════════╡
         │ 5            │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 6            │
         └──────────────┘
 
@@ -868,9 +864,7 @@ class ExprStringNameSpace:
         │ list[str]             │
         ╞═══════════════════════╡
         │ ["foo", "bar"]        │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ ["foo-bar"]           │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ ["foo", "bar", "baz"] │
         └───────────────────────┘
 
@@ -915,11 +909,8 @@ class ExprStringNameSpace:
         │ struct[2]   │
         ╞═════════════╡
         │ {"a","1"}   │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ {null,null} │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ {"c",null}  │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ {"d","4"}   │
         └─────────────┘
 
@@ -942,11 +933,8 @@ class ExprStringNameSpace:
         │ str  ┆ str        ┆ str         │
         ╞══════╪════════════╪═════════════╡
         │ a_1  ┆ a          ┆ 1           │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ null ┆ null       ┆ null        │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ c    ┆ c          ┆ null        │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ d_4  ┆ d          ┆ 4           │
         └──────┴────────────┴─────────────┘
 
@@ -985,11 +973,8 @@ class ExprStringNameSpace:
         │ struct[2]         │
         ╞═══════════════════╡
         │ {"foo","bar"}     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ {null,null}       │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ {"foo-bar",null}  │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ {"foo","bar baz"} │
         └───────────────────┘
 
@@ -1011,11 +996,8 @@ class ExprStringNameSpace:
         │ str         ┆ str        ┆ str         │
         ╞═════════════╪════════════╪═════════════╡
         │ foo bar     ┆ foo        ┆ bar         │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ null        ┆ null       ┆ null        │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ foo-bar     ┆ foo-bar    ┆ null        │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ foo bar baz ┆ foo        ┆ bar baz     │
         └─────────────┴────────────┴─────────────┘
 
@@ -1058,7 +1040,6 @@ class ExprStringNameSpace:
         │ i64 ┆ str    │
         ╞═════╪════════╡
         │ 1   ┆ 123ABC │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 2   ┆ abc456 │
         └─────┴────────┘
 
@@ -1099,7 +1080,6 @@ class ExprStringNameSpace:
         │ i64 ┆ str     │
         ╞═════╪═════════╡
         │ 1   ┆ -bc-bc  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
         │ 2   ┆ 123-123 │
         └─────┴─────────┘
 
@@ -1141,11 +1121,8 @@ class ExprStringNameSpace:
         │ str         ┆ str      │
         ╞═════════════╪══════════╡
         │ pear        ┆ ear      │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
         │ null        ┆ null     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
         │ papaya      ┆ aya      │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
         │ dragonfruit ┆ uit      │
         └─────────────┴──────────┘
 
@@ -1161,11 +1138,8 @@ class ExprStringNameSpace:
         │ str         ┆ str      │
         ╞═════════════╪══════════╡
         │ pear        ┆          │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
         │ null        ┆ null     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
         │ papaya      ┆ ya       │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
         │ dragonfruit ┆ onf      │
         └─────────────┴──────────┘
 

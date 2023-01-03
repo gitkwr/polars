@@ -292,3 +292,17 @@ def test_lazy_rename() -> None:
     assert (
         df.lazy().rename({"y": "x", "x": "y"}).select(["x", "y"]).collect()
     ).to_dict(False) == {"x": [2], "y": [1]}
+
+
+def test_all_null_cast_5826() -> None:
+    df = pl.DataFrame(data=[pl.Series("a", [None], dtype=pl.Utf8)])
+    out = df.with_column(pl.col("a").cast(pl.Boolean))
+    assert out.dtypes == [pl.Boolean]
+    assert out.item() is None
+
+
+def test_emtpy_list_eval_schema_5734() -> None:
+    df = pl.DataFrame({"a": [[{"b": 1, "c": 2}]]})
+    assert df.filter(False).select(
+        pl.col("a").arr.eval(pl.element().struct.field("b"))
+    ).schema == {"a": pl.List(pl.Int64)}

@@ -45,11 +45,11 @@ fn is_streamable(node: Node, expr_arena: &Arena<AExpr>) -> bool {
         AExpr::Function { options, .. } | AExpr::AnonymousFunction { options, .. } => {
             matches!(options.collect_groups, ApplyOptions::ApplyFlat)
         }
-        AExpr::Cast { .. }
-        | AExpr::Column(_)
+        AExpr::Column(_)
         | AExpr::Literal(_)
         | AExpr::BinaryExpr { .. }
-        | AExpr::Alias(_, _) => true,
+        | AExpr::Alias(_, _)
+        | AExpr::Cast { .. } => true,
         _ => false,
     })
 }

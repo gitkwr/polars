@@ -200,8 +200,12 @@ impl IntoPy<PyObject> for Wrap<AnyValue<'_>> {
             AnyValue::Boolean(v) => v.into_py(py),
             AnyValue::Utf8(v) => v.into_py(py),
             AnyValue::Utf8Owned(v) => v.into_py(py),
-            AnyValue::Categorical(idx, rev) => {
-                let s = rev.get(idx);
+            AnyValue::Categorical(idx, rev, arr) => {
+                let s = if arr.is_null() {
+                    rev.get(idx)
+                } else {
+                    unsafe { arr.deref_unchecked().value(idx as usize) }
+                };
                 s.into_py(py)
             }
             AnyValue::Date(v) => {
@@ -247,8 +251,13 @@ impl IntoPy<PyObject> for Wrap<AnyValue<'_>> {
             AnyValue::StructOwned(payload) => struct_dict(py, payload.0.into_iter(), &payload.1),
             #[cfg(feature = "object")]
             AnyValue::Object(v) => {
-                let s = format!("{v}");
-                s.into_py(py)
+                let object = v.as_any().downcast_ref::<ObjectValue>().unwrap();
+                object.inner.clone()
+            }
+            #[cfg(feature = "object")]
+            AnyValue::ObjectOwned(v) => {
+                let object = v.0.as_any().downcast_ref::<ObjectValue>().unwrap();
+                object.inner.clone()
             }
             AnyValue::Binary(v) => v.into_py(py),
             AnyValue::BinaryOwned(v) => v.into_py(py),

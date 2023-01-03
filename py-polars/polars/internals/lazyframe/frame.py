@@ -597,11 +597,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 1   ┆ 10  │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ 20  │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 30  │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 4   ┆ 40  │
         └─────┴─────┘
 
@@ -614,7 +611,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 1   ┆ 3   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ 4   │
         └─────┴─────┘
         >>> df.lazy().pipe(lambda tdf: tdf.select(sorted(tdf.columns))).collect()
@@ -625,16 +621,22 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 3   ┆ 1   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 4   ┆ 2   │
         └─────┴─────┘
 
         """
         return func(self, *args, **kwargs)
 
-    def describe_plan(self) -> str:
+    def describe_plan(self, *, optimized: bool = False) -> str:
         """
         Create a string representation of the unoptimized query plan.
+
+        Parameters
+        ----------
+        optimized
+            Return an optimized query plan. Defaults to `False`.
+            Use ``describe_optimized_plan`` to control
+            the optimization flags.
 
         Examples
         --------
@@ -650,6 +652,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         ... ).describe_plan()  # doctest: +SKIP
 
         """
+        if optimized:
+            return self._ldf.describe_optimized_plan()
         return self._ldf.describe_plan()
 
     @deprecated_alias(allow_streaming="streaming")
@@ -861,11 +865,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64  ┆ f64 ┆ str │
         ╞══════╪═════╪═════╡
         │ null ┆ 9.0 ┆ d   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 1    ┆ 6.0 ┆ a   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2    ┆ 7.0 ┆ b   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3    ┆ 8.0 ┆ c   │
         └──────┴─────┴─────┘
         >>> df.sort("foo", nulls_last=True).collect()
@@ -876,11 +877,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64  ┆ f64 ┆ str │
         ╞══════╪═════╪═════╡
         │ 1    ┆ 6.0 ┆ a   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2    ┆ 7.0 ┆ b   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3    ┆ 8.0 ┆ c   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ null ┆ 9.0 ┆ d   │
         └──────┴─────┴─────┘
         >>> df.sort("foo", reverse=True).collect()
@@ -891,11 +889,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64  ┆ f64 ┆ str │
         ╞══════╪═════╪═════╡
         │ 3    ┆ 8.0 ┆ c   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2    ┆ 7.0 ┆ b   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 1    ┆ 6.0 ┆ a   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ null ┆ 9.0 ┆ d   │
         └──────┴─────┴─────┘
 
@@ -913,11 +908,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64  ┆ f64 ┆ str │
         ╞══════╪═════╪═════╡
         │ 3    ┆ 8.0 ┆ c   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2    ┆ 7.0 ┆ b   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 1    ┆ 6.0 ┆ a   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ null ┆ 9.0 ┆ d   │
         └──────┴─────┴─────┘
 
@@ -1003,9 +995,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
          │ str ┆ i64 ┆ i64 │
          ╞═════╪═════╪═════╡
          │ a   ┆ 4   ┆ 10  │
-         ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
          │ b   ┆ 11  ┆ 10  │
-         ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
          │ c   ┆ 6   ┆ 1   │
          └─────┴─────┴─────┘,
          shape: (3, 3)
@@ -1015,9 +1005,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
          │ str                    ┆ u64   ┆ u64  │
          ╞════════════════════════╪═══════╪══════╡
          │ optimization           ┆ 0     ┆ 5    │
-         ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌┤
          │ groupby_partitioned(a) ┆ 5     ┆ 470  │
-         ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌┤
          │ sort(a)                ┆ 475   ┆ 1964 │
          └────────────────────────┴───────┴──────┘)
 
@@ -1140,9 +1128,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ str ┆ i64 ┆ i64 │
         ╞═════╪═════╪═════╡
         │ a   ┆ 4   ┆ 10  │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ b   ┆ 11  ┆ 10  │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ c   ┆ 6   ┆ 1   │
         └─────┴─────┴─────┘
 
@@ -1185,10 +1171,9 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         slice_pushdown: bool = True,
     ) -> pli.DataFrame:
         """
-        Collect into a DataFrame.
+        Persists a LazyFrame at the provided path.
 
-        Note: use :func:`fetch` if you want to run your query on the first `n` rows
-        only. This can be a huge time saver in debugging queries.
+        This allows streaming results that are larger than RAM to be written to disk.
 
         Parameters
         ----------
@@ -1233,6 +1218,15 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
             Turn off (certain) optimizations.
         slice_pushdown
             Slice pushdown optimization.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> ldf = pl.scan_csv("/path/to/my_larger_than_ram_file.csv")  # doctest: +SKIP
+        >>> ldf.sink_parquet("/tmp/out.parquet")  # doctest: +SKIP
 
         """
         if no_optimization:
@@ -1326,7 +1320,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ str ┆ i64 ┆ i64 │
         ╞═════╪═════╪═════╡
         │ a   ┆ 1   ┆ 6   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ b   ┆ 2   ┆ 5   │
         └─────┴─────┴─────┘
 
@@ -1462,7 +1455,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 ┆ str │
         ╞═════╪═════╪═════╡
         │ 1   ┆ 6   ┆ a   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ 7   ┆ b   │
         └─────┴─────┴─────┘
 
@@ -1488,7 +1480,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 ┆ str │
         ╞═════╪═════╪═════╡
         │ 1   ┆ 6   ┆ a   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 8   ┆ c   │
         └─────┴─────┴─────┘
 
@@ -1534,9 +1525,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 │
         ╞═════╡
         │ 1   │
-        ├╌╌╌╌╌┤
         │ 2   │
-        ├╌╌╌╌╌┤
         │ 3   │
         └─────┘
         >>> df.select(["foo", "bar"]).collect()
@@ -1547,9 +1536,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 1   ┆ 6   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ 7   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 8   │
         └─────┴─────┘
 
@@ -1561,9 +1548,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 │
         ╞═════╡
         │ 2   │
-        ├╌╌╌╌╌┤
         │ 3   │
-        ├╌╌╌╌╌┤
         │ 4   │
         └─────┘
 
@@ -1575,9 +1560,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 2   ┆ 7   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 8   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 4   ┆ 9   │
         └─────┴─────┘
 
@@ -1589,9 +1572,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i32     │
         ╞═════════╡
         │ 0       │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ 0       │
-        ├╌╌╌╌╌╌╌╌╌┤
         │ 10      │
         └─────────┘
 
@@ -1637,9 +1618,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ str ┆ i64 │
         ╞═════╪═════╡
         │ a   ┆ 4   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ b   ┆ 11  │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ c   ┆ 6   │
         └─────┴─────┘
 
@@ -1744,15 +1723,10 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ datetime[μs]        ┆ i64   ┆ i64   ┆ i64   │
         ╞═════════════════════╪═══════╪═══════╪═══════╡
         │ 2020-01-01 13:45:48 ┆ 3     ┆ 3     ┆ 3     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 2020-01-01 16:42:13 ┆ 10    ┆ 3     ┆ 7     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 2020-01-01 16:45:09 ┆ 15    ┆ 3     ┆ 7     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 2020-01-02 18:12:48 ┆ 24    ┆ 3     ┆ 9     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 2020-01-03 19:45:32 ┆ 11    ┆ 2     ┆ 9     │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 2020-01-08 23:16:43 ┆ 1     ┆ 1     ┆ 1     │
         └─────────────────────┴───────┴───────┴───────┘
 
@@ -1879,17 +1853,11 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ datetime[μs]        ┆ i64 │
         ╞═════════════════════╪═════╡
         │ 2021-12-16 00:00:00 ┆ 0   │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2021-12-16 00:30:00 ┆ 1   │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2021-12-16 01:00:00 ┆ 2   │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2021-12-16 01:30:00 ┆ 3   │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2021-12-16 02:00:00 ┆ 4   │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2021-12-16 02:30:00 ┆ 5   │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2021-12-16 03:00:00 ┆ 6   │
         └─────────────────────┴─────┘
 
@@ -1912,11 +1880,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ datetime[μs]        ┆ datetime[μs]        ┆ datetime[μs]        │
         ╞═════════════════════╪═════════════════════╪═════════════════════╡
         │ 2021-12-15 23:00:00 ┆ 2021-12-16 00:00:00 ┆ 2021-12-16 00:00:00 │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 00:00:00 ┆ 2021-12-16 00:30:00 ┆ 2021-12-16 01:00:00 │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 01:00:00 ┆ 2021-12-16 01:30:00 ┆ 2021-12-16 02:00:00 │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 02:00:00 ┆ 2021-12-16 02:30:00 ┆ 2021-12-16 03:00:00 │
         └─────────────────────┴─────────────────────┴─────────────────────┘
 
@@ -1936,11 +1901,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ datetime[μs]        ┆ datetime[μs]        ┆ datetime[μs]        ┆ u32        │
         ╞═════════════════════╪═════════════════════╪═════════════════════╪════════════╡
         │ 2021-12-15 23:00:00 ┆ 2021-12-16 00:00:00 ┆ 2021-12-15 23:00:00 ┆ 1          │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 00:00:00 ┆ 2021-12-16 01:00:00 ┆ 2021-12-16 00:00:00 ┆ 2          │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 01:00:00 ┆ 2021-12-16 02:00:00 ┆ 2021-12-16 01:00:00 ┆ 2          │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 02:00:00 ┆ 2021-12-16 03:00:00 ┆ 2021-12-16 02:00:00 ┆ 2          │
         └─────────────────────┴─────────────────────┴─────────────────────┴────────────┘
 
@@ -1964,11 +1926,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ datetime[μs]        ┆ u32        ┆ list[datetime[μs]]                  │
         ╞═════════════════════╪════════════╪═════════════════════════════════════╡
         │ 2021-12-16 00:00:00 ┆ 2          ┆ [2021-12-16 00:00:00, 2021-12-16... │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 01:00:00 ┆ 2          ┆ [2021-12-16 01:00:00, 2021-12-16... │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 02:00:00 ┆ 2          ┆ [2021-12-16 02:00:00, 2021-12-16... │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 03:00:00 ┆ 1          ┆ [2021-12-16 03:00:00]               │
         └─────────────────────┴────────────┴─────────────────────────────────────┘
 
@@ -1986,13 +1945,9 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ datetime[μs]        ┆ u32        │
         ╞═════════════════════╪════════════╡
         │ 2021-12-15 23:00:00 ┆ 1          │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 00:00:00 ┆ 3          │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 01:00:00 ┆ 3          │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 02:00:00 ┆ 3          │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 03:00:00 ┆ 1          │
         └─────────────────────┴────────────┘
 
@@ -2016,17 +1971,11 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ datetime[μs]        ┆ str    │
         ╞═════════════════════╪════════╡
         │ 2021-12-16 00:00:00 ┆ a      │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 00:30:00 ┆ a      │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 01:00:00 ┆ a      │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 01:30:00 ┆ b      │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 02:00:00 ┆ b      │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 02:30:00 ┆ a      │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 2021-12-16 03:00:00 ┆ a      │
         └─────────────────────┴────────┘
         >>> (
@@ -2047,17 +1996,11 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ str    ┆ datetime[μs]        ┆ datetime[μs]        ┆ datetime[μs]        ┆ u32        │
         ╞════════╪═════════════════════╪═════════════════════╪═════════════════════╪════════════╡
         │ a      ┆ 2021-12-15 23:00:00 ┆ 2021-12-16 00:00:00 ┆ 2021-12-15 23:00:00 ┆ 1          │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ a      ┆ 2021-12-16 00:00:00 ┆ 2021-12-16 01:00:00 ┆ 2021-12-16 00:00:00 ┆ 3          │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ a      ┆ 2021-12-16 01:00:00 ┆ 2021-12-16 02:00:00 ┆ 2021-12-16 01:00:00 ┆ 1          │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ a      ┆ 2021-12-16 02:00:00 ┆ 2021-12-16 03:00:00 ┆ 2021-12-16 02:00:00 ┆ 2          │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ a      ┆ 2021-12-16 03:00:00 ┆ 2021-12-16 04:00:00 ┆ 2021-12-16 03:00:00 ┆ 1          │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ b      ┆ 2021-12-16 01:00:00 ┆ 2021-12-16 02:00:00 ┆ 2021-12-16 01:00:00 ┆ 2          │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ b      ┆ 2021-12-16 02:00:00 ┆ 2021-12-16 03:00:00 ┆ 2021-12-16 02:00:00 ┆ 1          │
         └────────┴─────────────────────┴─────────────────────┴─────────────────────┴────────────┘
 
@@ -2087,9 +2030,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64             ┆ i64             ┆ i64 ┆ list[str]       │
         ╞═════════════════╪═════════════════╪═════╪═════════════════╡
         │ 0               ┆ 3               ┆ 0   ┆ ["A", "B", "B"] │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2               ┆ 5               ┆ 2   ┆ ["B", "B", "C"] │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 4               ┆ 7               ┆ 4   ┆ ["C"]           │
         └─────────────────┴─────────────────┴─────┴─────────────────┘
 
@@ -2238,11 +2179,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ datetime[μs]        ┆ f64        ┆ i64  │
         ╞═════════════════════╪════════════╪══════╡
         │ 2016-05-12 00:00:00 ┆ 82.19      ┆ 4164 │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 2017-05-12 00:00:00 ┆ 82.66      ┆ 4411 │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 2018-05-12 00:00:00 ┆ 83.12      ┆ 4566 │
-        ├╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 2019-05-12 00:00:00 ┆ 83.52      ┆ 4696 │
         └─────────────────────┴────────────┴──────┘
 
@@ -2363,7 +2301,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ f64 ┆ str ┆ str   │
         ╞═════╪═════╪═════╪═══════╡
         │ 1   ┆ 6.0 ┆ a   ┆ x     │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 2   ┆ 7.0 ┆ b   ┆ y     │
         └─────┴─────┴─────┴───────┘
         >>> df.join(other_df, on="ham", how="outer").collect()
@@ -2374,11 +2311,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64  ┆ f64  ┆ str ┆ str   │
         ╞══════╪══════╪═════╪═══════╡
         │ 1    ┆ 6.0  ┆ a   ┆ x     │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 2    ┆ 7.0  ┆ b   ┆ y     │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ null ┆ null ┆ d   ┆ z     │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 3    ┆ 8.0  ┆ c   ┆ null  │
         └──────┴──────┴─────┴───────┘
         >>> df.join(other_df, on="ham", how="left").collect()
@@ -2389,9 +2323,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ f64 ┆ str ┆ str   │
         ╞═════╪═════╪═════╪═══════╡
         │ 1   ┆ 6.0 ┆ a   ┆ x     │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 2   ┆ 7.0 ┆ b   ┆ y     │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 3   ┆ 8.0 ┆ c   ┆ null  │
         └─────┴─────┴─────┴───────┘
         >>> df.join(other_df, on="ham", how="semi").collect()
@@ -2402,7 +2334,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ f64 ┆ str │
         ╞═════╪═════╪═════╡
         │ 1   ┆ 6.0 ┆ a   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ 7.0 ┆ b   │
         └─────┴─────┴─────┘
         >>> df.join(other_df, on="ham", how="anti").collect()
@@ -2486,11 +2417,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ f64  ┆ bool  ┆ f64  ┆ f64  ┆ bool  │
         ╞═════╪══════╪═══════╪══════╪══════╪═══════╡
         │ 1   ┆ 0.5  ┆ true  ┆ 1.0  ┆ 0.25 ┆ false │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 2   ┆ 4.0  ┆ true  ┆ 4.0  ┆ 2.0  ┆ false │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 3   ┆ 10.0 ┆ false ┆ 9.0  ┆ 5.0  ┆ true  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ 4   ┆ 13.0 ┆ true  ┆ 16.0 ┆ 6.5  ┆ false │
         └─────┴──────┴───────┴──────┴──────┴───────┘
 
@@ -2510,11 +2438,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ f64  ┆ bool  ┆ f64  ┆ bool  ┆ str │
         ╞═════╪══════╪═══════╪══════╪═══════╪═════╡
         │ 1   ┆ 0.5  ┆ true  ┆ 0.5  ┆ false ┆ foo │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ 4.0  ┆ true  ┆ 8.0  ┆ false ┆ foo │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 10.0 ┆ false ┆ 30.0 ┆ true  ┆ foo │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 4   ┆ 13.0 ┆ true  ┆ 52.0 ┆ false ┆ foo │
         └─────┴──────┴───────┴──────┴───────┴─────┘
 
@@ -2576,9 +2501,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ str  │
         ╞══════╡
         │ afoo │
-        ├╌╌╌╌╌╌┤
         │ cfoo │
-        ├╌╌╌╌╌╌┤
         │ null │
         └──────┘
 
@@ -2601,9 +2524,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ f64       │
         ╞═══════════╡
         │ -1.0      │
-        ├╌╌╌╌╌╌╌╌╌╌╌┤
         │ 0.0       │
-        ├╌╌╌╌╌╌╌╌╌╌╌┤
         │ 1.0       │
         └───────────┘
 
@@ -2638,9 +2559,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 ┆ f64       │
         ╞═════╪═════╪═══════════╡
         │ 1   ┆ 2   ┆ 4.0       │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌┤
         │ 3   ┆ 4   ┆ 16.0      │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌┤
         │ 5   ┆ 6   ┆ 36.0      │
         └─────┴─────┴───────────┘
         >>> df.with_column(pl.col("a") ** 2).collect()  # replaced
@@ -2651,9 +2570,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ f64  ┆ i64 │
         ╞══════╪═════╡
         │ 1.0  ┆ 2   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 9.0  ┆ 4   │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 25.0 ┆ 6   │
         └──────┴─────┘
         >>> df.with_column(pl.Series("c", [7, 8, 9])).collect()  # add from a Series
@@ -2664,9 +2581,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 ┆ i64 │
         ╞═════╪═════╪═════╡
         │ 1   ┆ 2   ┆ 7   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 4   ┆ 8   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 5   ┆ 6   ┆ 9   │
         └─────┴─────┴─────┘
 
@@ -2705,9 +2620,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ f64 │
         ╞═════╪═════╡
         │ 1   ┆ 6.0 │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ 7.0 │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 8.0 │
         └─────┴─────┘
 
@@ -2738,9 +2651,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64   ┆ i64 ┆ str │
         ╞═══════╪═════╪═════╡
         │ 1     ┆ 6   ┆ a   │
-        ├╌╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2     ┆ 7   ┆ b   │
-        ├╌╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3     ┆ 8   ┆ c   │
         └───────┴─────┴─────┘
 
@@ -2769,9 +2680,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ str ┆ i64 │
         ╞═════╪═════╡
         │ c   ┆ 3   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ b   ┆ 2   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ a   ┆ 1   │
         └─────┴─────┘
 
@@ -2803,9 +2712,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64  ┆ i64  │
         ╞══════╪══════╡
         │ null ┆ null │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 1    ┆ 2    │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 3    ┆ 4    │
         └──────┴──────┘
         >>> df.shift(periods=-1).collect()
@@ -2816,9 +2723,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64  ┆ i64  │
         ╞══════╪══════╡
         │ 3    ┆ 4    │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 5    ┆ 6    │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ null ┆ null │
         └──────┴──────┘
 
@@ -2856,9 +2761,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 0   ┆ 0   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 1   ┆ 2   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 4   │
         └─────┴─────┘
         >>> df.shift_and_fill(periods=-1, fill_value=0).collect()
@@ -2869,9 +2772,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 3   ┆ 4   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 5   ┆ 6   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 0   ┆ 0   │
         └─────┴─────┘
 
@@ -2910,7 +2811,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ str ┆ i64 ┆ i64 │
         ╞═════╪═════╪═════╡
         │ y   ┆ 3   ┆ 4   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ z   ┆ 5   ┆ 6   │
         └─────┴─────┴─────┘
 
@@ -2954,13 +2854,9 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 1   ┆ 7   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ 8   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 9   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 4   ┆ 10  │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 5   ┆ 11  │
         └─────┴─────┘
         >>> df.limit(2).collect()
@@ -2971,7 +2867,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 1   ┆ 7   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ 8   │
         └─────┴─────┘
 
@@ -3009,13 +2904,9 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 1   ┆ 7   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ 8   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 9   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 4   ┆ 10  │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 5   ┆ 11  │
         └─────┴─────┘
         >>> df.head(2).collect()
@@ -3026,7 +2917,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 1   ┆ 7   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ 8   │
         └─────┴─────┘
 
@@ -3058,13 +2948,9 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 2   ┆ 8   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 9   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 4   ┆ 10  │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 5   ┆ 11  │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 6   ┆ 12  │
         └─────┴─────┘
         >>> df.tail(2).collect()
@@ -3075,7 +2961,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 5   ┆ 11  │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 6   ┆ 12  │
         └─────┴─────┘
 
@@ -3164,9 +3049,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ u32    ┆ i64 ┆ i64 │
         ╞════════╪═════╪═════╡
         │ 0      ┆ 1   ┆ 2   │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 1      ┆ 3   ┆ 4   │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2      ┆ 5   ┆ 6   │
         └────────┴─────┴─────┘
 
@@ -3188,7 +3071,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 1   ┆ 5   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 7   │
         └─────┴─────┘
 
@@ -3233,11 +3115,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ f64  │
         ╞═════╪══════╡
         │ 1   ┆ 0.5  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 2   ┆ 4.0  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 99  ┆ 99.0 │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 4   ┆ 13.0 │
         └─────┴──────┘
         >>> df.fill_null(strategy="forward").collect()
@@ -3248,11 +3127,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ f64  │
         ╞═════╪══════╡
         │ 1   ┆ 0.5  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 2   ┆ 4.0  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 2   ┆ 4.0  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 4   ┆ 13.0 │
         └─────┴──────┘
 
@@ -3264,11 +3140,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ f64  │
         ╞═════╪══════╡
         │ 1   ┆ 0.5  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 2   ┆ 4.0  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 4   ┆ 13.0 │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 4   ┆ 13.0 │
         └─────┴──────┘
 
@@ -3280,11 +3153,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ f64  │
         ╞═════╪══════╡
         │ 1   ┆ 0.5  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 2   ┆ 4.0  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 0   ┆ 0.0  │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 4   ┆ 13.0 │
         └─────┴──────┘
 
@@ -3365,11 +3235,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ f64  ┆ f64  │
         ╞══════╪══════╡
         │ 1.5  ┆ 0.5  │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 2.0  ┆ 4.0  │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 99.0 ┆ 99.0 │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ 4.0  ┆ 13.0 │
         └──────┴──────┘
 
@@ -3591,19 +3458,12 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ str     ┆ i64     │
         ╞═════════╪═════════╡
         │ a       ┆ 1       │
-        ├╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
         │ a       ┆ 2       │
-        ├╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
         │ a       ┆ 3       │
-        ├╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
         │ b       ┆ 4       │
-        ├╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
         │ b       ┆ 5       │
-        ├╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
         │ c       ┆ 6       │
-        ├╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
         │ c       ┆ 7       │
-        ├╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┤
         │ c       ┆ 8       │
         └─────────┴─────────┘
 
@@ -3654,9 +3514,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ str ┆ str │
         ╞═════╪═════╪═════╡
         │ 1   ┆ a   ┆ b   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 2   ┆ a   ┆ b   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ a   ┆ b   │
         └─────┴─────┴─────┘
         >>> df.unique(subset=["bar", "ham"]).collect()
@@ -3676,9 +3534,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ str ┆ str │
         ╞═════╪═════╪═════╡
         │ 2   ┆ a   ┆ b   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ a   ┆ b   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 1   ┆ a   ┆ b   │
         └─────┴─────┴─────┘
 
@@ -3713,7 +3569,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 ┆ str │
         ╞═════╪═════╪═════╡
         │ 1   ┆ 6   ┆ a   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 3   ┆ 8   ┆ c   │
         └─────┴─────┴─────┘
 
@@ -3737,11 +3592,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ f64  ┆ i64  ┆ i64  │
         ╞══════╪══════╪══════╡
         │ null ┆ 1    ┆ 1    │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ null ┆ 2    ┆ null │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ null ┆ null ┆ null │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ null ┆ 1    ┆ 1    │
         └──────┴──────┴──────┘
 
@@ -3761,9 +3613,7 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ f64  ┆ i64 ┆ i64  │
         ╞══════╪═════╪══════╡
         │ null ┆ 1   ┆ 1    │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ null ┆ 2   ┆ null │
-        ├╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌┤
         │ null ┆ 1   ┆ 1    │
         └──────┴─────┴──────┘
 
@@ -3818,15 +3668,10 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ str ┆ str      ┆ i64   │
         ╞═════╪══════════╪═══════╡
         │ x   ┆ b        ┆ 1     │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ y   ┆ b        ┆ 3     │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ z   ┆ b        ┆ 5     │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ x   ┆ c        ┆ 2     │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ y   ┆ c        ┆ 4     │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ z   ┆ c        ┆ 6     │
         └─────┴──────────┴───────┘
 
@@ -3899,7 +3744,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64 │
         ╞═════╪═════╡
         │ 2   ┆ 6   │
-        ├╌╌╌╌╌┼╌╌╌╌╌┤
         │ 4   ┆ 8   │
         └─────┴─────┘
 
@@ -3941,11 +3785,8 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ i64 ┆ i64  ┆ i64 │
         ╞═════╪══════╪═════╡
         │ 1   ┆ 6    ┆ 1   │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 5   ┆ 7    ┆ 3   │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 9   ┆ 9    ┆ 6   │
-        ├╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌┤
         │ 10  ┆ null ┆ 9   │
         └─────┴──────┴─────┘
 
@@ -3990,7 +3831,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ str    ┆ struct[4]           ┆ str   │
         ╞════════╪═════════════════════╪═══════╡
         │ foo    ┆ {1,"a",true,[1, 2]} ┆ baz   │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ bar    ┆ {2,"b",null,[3]}    ┆ womp  │
         └────────┴─────────────────────┴───────┘
         >>> df.unnest("t_struct").fetch()
@@ -4001,7 +3841,6 @@ naive plan: (run LazyFrame.describe_optimized_plan() to see the optimized plan)
         │ str    ┆ i64 ┆ str ┆ bool ┆ list[i64] ┆ str   │
         ╞════════╪═════╪═════╪══════╪═══════════╪═══════╡
         │ foo    ┆ 1   ┆ a   ┆ true ┆ [1, 2]    ┆ baz   │
-        ├╌╌╌╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ bar    ┆ 2   ┆ b   ┆ null ┆ [3]       ┆ womp  │
         └────────┴─────┴─────┴──────┴───────────┴───────┘
 

@@ -1,14 +1,15 @@
 use std::hash::{Hash, Hasher};
 
 use arrow::array::*;
-use hashbrown::hash_map::RawEntryMut;
+use hashbrown::hash_map::{Entry, RawEntryMut};
 use polars_arrow::trusted_len::PushUnchecked;
 use polars_utils::HashSingle;
 
 use crate::datatypes::PlHashMap;
+use crate::error::PolarsError::ComputeError;
 use crate::frame::groupby::hashing::HASHMAP_INIT_SIZE;
 use crate::prelude::*;
-use crate::{using_string_cache, StrHashGlobal, StringCache, POOL};
+use crate::{using_string_cache, StringCache, POOL};
 
 pub enum RevMappingBuilder {
     /// Hashmap: maps the indexes from the global cache/categorical array to indexes in the local Utf8Array
@@ -272,31 +273,15 @@ impl<'a> CategoricalChunkedBuilder<'a> {
         {
             let cache = &mut crate::STRING_CACHE.lock_map();
             id = cache.uuid;
-            let global_mapping = &mut cache.map;
-            let hb = global_mapping.hasher().clone();
 
             for s in values.values_iter() {
-                let h = hb.hash_single(s);
-                let mut global_idx = global_mapping.len() as u32;
-                // Note that we don't create the StrHashGlobal to search the key in the hashmap
-                // as StrHashGlobal may allocate a string
-                let entry = global_mapping
-                    .raw_entry_mut()
-                    .from_hash(h, |val| (val.hash == h) && val.str == s);
+                let global_idx = cache.insert(s);
 
-                match entry {
-                    RawEntryMut::Occupied(entry) => global_idx = *entry.get(),
-                    RawEntryMut::Vacant(entry) => {
-                        // only just now we allocate the string
-                        let key = StrHashGlobal::new(s.into(), h);
-                        entry.insert_with_hasher(h, key, global_idx, |s| s.hash);
-                    }
-                }
                 // safety:
                 // we allocated enough
                 unsafe { local_to_global.push_unchecked(global_idx) }
             }
-            if global_mapping.len() > u32::MAX as usize {
+            if cache.len() > u32::MAX as usize {
                 panic!("not more than {} categories supported", u32::MAX)
             };
         }
@@ -355,29 +340,14 @@ impl<'a> CategoricalChunkedBuilder<'a> {
         {
             let cache = &mut crate::STRING_CACHE.lock_map();
             id = cache.uuid;
-            let global_mapping = &mut cache.map;
 
             for (s, h) in values.values_iter().zip(hashes.into_iter()) {
-                let mut global_idx = global_mapping.len() as u32;
-                // Note that we don't create the StrHashGlobal to search the key in the hashmap
-                // as StrHashGlobal may allocate a string
-                let entry = global_mapping
-                    .raw_entry_mut()
-                    .from_hash(h, |val| (val.hash == h) && val.str == s);
-
-                match entry {
-                    RawEntryMut::Occupied(entry) => global_idx = *entry.get(),
-                    RawEntryMut::Vacant(entry) => {
-                        // only just now we allocate the string
-                        let key = StrHashGlobal::new(s.into(), h);
-                        entry.insert_with_hasher(h, key, global_idx, |s| s.hash);
-                    }
-                }
+                let global_idx = cache.insert_from_hash(h, s);
                 // safety:
                 // we allocated enough
                 unsafe { local_to_global.push_unchecked(global_idx) }
             }
-            if global_mapping.len() > u32::MAX as usize {
+            if cache.len() > u32::MAX as usize {
                 panic!("not more than {} categories supported", u32::MAX)
             };
         }
@@ -442,6 +412,59 @@ fn fill_global_to_local(local_to_global: &[u32], global_to_local: &mut PlHashMap
         // we know the keys are unique so this is much faster
         global_to_local.insert_unique_unchecked(*global_idx, local_idx);
         local_idx += 1;
+    }
+}
+
+impl CategoricalChunked {
+    /// Create a [`CategoricalChunked`] from a categorical indices. The indices will
+    /// probe the global string cache.
+    pub(crate) fn from_global_indices(cats: UInt32Chunked) -> PolarsResult<CategoricalChunked> {
+        let cache = crate::STRING_CACHE.read_map();
+        let len = cache.len() as u32;
+        drop(cache);
+        let mut oob = false;
+
+        // fastest happy path
+        for cat in cats.into_iter().flatten() {
+            if cat >= len {
+                oob = true
+            }
+        }
+
+        if oob {
+            return Err(ComputeError("Cannot construct 'Categorical' from these categories. At least on of them is out of bounds.".into()));
+        }
+        Ok(unsafe { Self::from_global_indices_unchecked(cats) })
+    }
+
+    /// Create a [`CategoricalChunked`] from a categorical indices. The indices will
+    /// probe the global string cache.
+    ///
+    /// # Safety
+    ///
+    /// This does not do any bound checks
+    pub unsafe fn from_global_indices_unchecked(cats: UInt32Chunked) -> CategoricalChunked {
+        let cache = crate::STRING_CACHE.read_map();
+
+        let cap = std::cmp::min(std::cmp::min(cats.len(), cache.len()), HASHMAP_INIT_SIZE);
+        let mut rev_map = PlHashMap::with_capacity(cap);
+        let mut str_values = MutableUtf8Array::with_capacities(cap, cap * 24);
+
+        for arr in cats.downcast_iter() {
+            for cat in arr.into_iter().flatten().copied() {
+                let offset = str_values.len() as u32;
+
+                if let Entry::Vacant(entry) = rev_map.entry(cat) {
+                    entry.insert(offset);
+                    let str_val = cache.get_unchecked(cat);
+                    str_values.push(Some(str_val))
+                }
+            }
+        }
+
+        let rev_map = RevMapping::Global(rev_map, str_values.into(), cache.uuid);
+
+        CategoricalChunked::from_cats_and_rev_map_unchecked(cats, Arc::new(rev_map))
     }
 }
 

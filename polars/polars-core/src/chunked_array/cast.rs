@@ -22,9 +22,10 @@ pub(crate) fn cast_chunks(
         }
     };
 
+    let arrow_dtype = dtype.to_arrow();
     let chunks = chunks
         .iter()
-        .map(|arr| arrow::compute::cast::cast(arr.as_ref(), &dtype.to_arrow(), options))
+        .map(|arr| arrow::compute::cast::cast(arr.as_ref(), &arrow_dtype, options))
         .collect::<arrow::error::Result<Vec<_>>>()?;
     Ok(chunks)
 }
@@ -62,7 +63,16 @@ where
         match data_type {
             #[cfg(feature = "dtype-categorical")]
             DataType::Categorical(_) => {
-                Ok(CategoricalChunked::full_null(self.name(), self.len()).into_series())
+                if self.dtype() == &DataType::UInt32 {
+                    // safety:
+                    // we are guarded by the type system.
+                    let ca = unsafe { &*(self as *const ChunkedArray<T> as *const UInt32Chunked) };
+                    CategoricalChunked::from_global_indices(ca.clone()).map(|ca| ca.into_series())
+                } else {
+                    Err(PolarsError::ComputeError(
+                        "Cannot cast numeric types to 'Categorical'".into(),
+                    ))
+                }
             }
             #[cfg(feature = "dtype-struct")]
             DataType::Struct(fields) => {
