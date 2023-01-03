@@ -27,18 +27,10 @@ impl Series {
                 let arr = ca.chunks[chunk_idx].clone();
                 let arr = arr.as_any().downcast_ref::<ListArray<i64>>().unwrap();
 
-                let new_values = if let DataType::Null = &**inner {
-                    arr.values().clone()
-                } else {
-                    let s = unsafe {
-                        Series::from_chunks_and_dtype_unchecked(
-                            "",
-                            vec![arr.values().clone()],
-                            inner,
-                        )
-                    };
-                    s.to_arrow(0)
+                let s = unsafe {
+                    Series::from_chunks_and_dtype_unchecked("", vec![arr.values().clone()], inner)
                 };
+                let new_values = s.to_arrow(0);
 
                 let data_type = ListArray::<i64>::default_datatype(inner.to_arrow());
                 let arr = ListArray::<i64>::new(
@@ -79,22 +71,6 @@ impl Series {
             }
             #[cfg(feature = "dtype-time")]
             DataType::Time => cast(&*self.chunks()[chunk_idx], &DataType::Time.to_arrow()).unwrap(),
-            #[cfg(feature = "object")]
-            DataType::Object(_) => {
-                use crate::chunked_array::object::builder::object_series_to_arrow_array;
-                if self.chunks().len() == 1 && chunk_idx == 0 {
-                    object_series_to_arrow_array(self)
-                } else {
-                    // we slice the series to only that chunk
-                    let offset = self.chunks()[..chunk_idx]
-                        .iter()
-                        .map(|arr| arr.len())
-                        .sum::<usize>() as i64;
-                    let len = self.chunks()[chunk_idx].len();
-                    let s = self.slice(offset, len);
-                    object_series_to_arrow_array(&s)
-                }
-            }
             _ => self.array_ref(chunk_idx).clone(),
         }
     }

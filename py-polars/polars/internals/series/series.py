@@ -41,7 +41,6 @@ from polars.datatypes import (
     Utf8,
     dtype_to_ctype,
     get_idx_type,
-    is_polars_dtype,
     maybe_cast,
     numpy_char_code_to_dtype,
     py_type_to_dtype,
@@ -204,15 +203,7 @@ class Series:
         nan_to_null: bool = False,
         dtype_if_empty: PolarsDataType | None = None,
     ):
-        # Raise error if dtype is not valid
-        if (
-            dtype is not None
-            and not is_polars_dtype(dtype)
-            and py_type_to_dtype(dtype, raise_unmatched=False) is None
-        ):
-            raise ValueError(
-                f"Given dtype: '{dtype}' is not a valid Polars data type and cannot be converted into one."  # noqa: E501
-            )
+
         # Handle case where values are passed as the first argument
         if name is not None and not isinstance(name, str):
             if values is None:
@@ -264,12 +255,7 @@ class Series:
             )
         elif isinstance(values, Sequence):
             self._s = sequence_to_pyseries(
-                name,
-                values,
-                dtype=dtype,
-                strict=strict,
-                dtype_if_empty=dtype_if_empty,
-                nan_to_null=nan_to_null,
+                name, values, dtype=dtype, strict=strict, dtype_if_empty=dtype_if_empty
             )
         elif _PANDAS_TYPE(values) and isinstance(values, (pd.Series, pd.DatetimeIndex)):
             self._s = pandas_to_pyseries(name, values)
@@ -469,21 +455,6 @@ class Series:
 
     def __le__(self, other: Any) -> Series:
         return self._comp(other, "lt_eq")
-
-    def le(self, other: Any) -> Series:
-        return self.__le__(other)
-
-    def eq(self, other: Any) -> Series:
-        return self.__eq__(other)
-
-    def ne(self, other: Any) -> Series:
-        return self.__ne__(other)
-
-    def lt(self, other: Any) -> Series:
-        return self.__lt__(other)
-
-    def gt(self, other: Any) -> Series:
-        return self.__gt__(other)
 
     def _arithmetic(self, other: Any, op_s: str, op_ffi: str) -> Series:
         if isinstance(other, pli.Expr):
@@ -877,11 +848,7 @@ class Series:
         key: int | Series | np.ndarray[Any, Any] | Sequence[object] | tuple[object],
         value: Any,
     ) -> None:
-        # do the single idx as first branch as those are likely in a tight loop
-        if isinstance(key, int) and not isinstance(key, bool):
-            self.set_at_idx(key, value)
-            return None
-        elif isinstance(value, Sequence) and not isinstance(value, str):
+        if isinstance(value, Sequence) and not isinstance(value, str):
             if self.is_numeric() or self.is_datelike():
                 self.set_at_idx(key, value)  # type: ignore[arg-type]
                 return None
@@ -908,6 +875,8 @@ class Series:
         elif isinstance(key, (list, tuple)):
             s = wrap_s(sequence_to_pyseries("", key, dtype=UInt32))
             self.__setitem__(s, value)
+        elif isinstance(key, int) and not isinstance(key, bool):
+            self.__setitem__([key], value)
         else:
             raise ValueError(f'cannot use "{key}" for indexing')
 
@@ -1117,6 +1086,7 @@ class Series:
         │ i64 │
         ╞═════╡
         │ 123 │
+        ├╌╌╌╌╌┤
         │ 456 │
         └─────┘
 
@@ -1129,6 +1099,7 @@ class Series:
         │ i64 │
         ╞═════╡
         │ 123 │
+        ├╌╌╌╌╌┤
         │ 456 │
         └─────┘
 
@@ -1159,10 +1130,15 @@ class Series:
         │ str        ┆ f64      │
         ╞════════════╪══════════╡
         │ min        ┆ 1.0      │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
         │ max        ┆ 5.0      │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
         │ null_count ┆ 0.0      │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
         │ mean       ┆ 3.0      │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
         │ std        ┆ 1.581139 │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
         │ count      ┆ 5.0      │
         └────────────┴──────────┘
 
@@ -1175,7 +1151,9 @@ class Series:
         │ str        ┆ i64   │
         ╞════════════╪═══════╡
         │ unique     ┆ 4     │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ null_count ┆ 1     │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌┤
         │ count      ┆ 5     │
         └────────────┴───────┘
 
@@ -1397,7 +1375,9 @@ class Series:
         │ u8  ┆ u8  ┆ u8  │
         ╞═════╪═════╪═════╡
         │ 1   ┆ 0   ┆ 0   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 0   ┆ 1   ┆ 0   │
+        ├╌╌╌╌╌┼╌╌╌╌╌┼╌╌╌╌╌┤
         │ 0   ┆ 0   ┆ 1   │
         └─────┴─────┴─────┘
 
@@ -1424,7 +1404,9 @@ class Series:
         │ i64 ┆ u32    │
         ╞═════╪════════╡
         │ 1   ┆ 1      │
+        ├╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 2   ┆ 2      │
+        ├╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
         │ 3   ┆ 1      │
         └─────┴────────┘
 
@@ -2888,7 +2870,9 @@ class Series:
         │ i64     │
         ╞═════════╡
         │ 1       │
+        ├╌╌╌╌╌╌╌╌╌┤
         │ 10      │
+        ├╌╌╌╌╌╌╌╌╌┤
         │ 3       │
         └─────────┘
 
@@ -2960,7 +2944,9 @@ class Series:
         │ i64     │
         ╞═════════╡
         │ 1       │
+        ├╌╌╌╌╌╌╌╌╌┤
         │ 10      │
+        ├╌╌╌╌╌╌╌╌╌┤
         │ 3       │
         └─────────┘
 
@@ -3212,14 +3198,6 @@ class Series:
     def sign(self) -> Series:
         """
         Compute the element-wise indication of the sign.
-
-        The returned values can be -1, 0, or 1:
-
-        * -1 if x  < 0.
-        *  0 if x == 0.
-        *  1 if x  > 0.
-
-        (null values are preserved as-is).
 
         Examples
         --------

@@ -1,3 +1,4 @@
+# flake8: noqa: W291
 from __future__ import annotations
 
 import sys
@@ -14,6 +15,7 @@ import pytest
 import polars as pl
 from polars.datatypes import DTYPE_TEMPORAL_UNITS
 from polars.dependencies import zoneinfo
+from polars.exceptions import NoRowsReturned, TooManyRowsReturned
 from polars.internals.construction import iterable_to_pydf
 from polars.testing import assert_frame_equal, assert_series_equal
 from polars.testing.parametric import columns
@@ -891,6 +893,42 @@ def test_df_fold() -> None:
     assert df_width_one.fold(lambda s1, s2: s1).series_equal(df["a"])
 
 
+def test_row_tuple() -> None:
+    df = pl.DataFrame({"a": ["foo", "bar", "2"], "b": [1, 2, 3], "c": [1.0, 2.0, 3.0]})
+
+    # return row by index
+    assert df.row(0) == ("foo", 1, 1.0)
+    assert df.row(1) == ("bar", 2, 2.0)
+    assert df.row(-1) == ("2", 3, 3.0)
+
+    # return row by predicate
+    assert df.row(by_predicate=pl.col("a") == "bar") == ("bar", 2, 2.0)
+    assert df.row(by_predicate=pl.col("b").is_in([2, 4, 6])) == ("bar", 2, 2.0)
+
+    # expected error conditions
+    with pytest.raises(TooManyRowsReturned):
+        df.row(by_predicate=pl.col("b").is_in([1, 3, 5]))
+
+    with pytest.raises(NoRowsReturned):
+        df.row(by_predicate=pl.col("a") == "???")
+
+    # cannot set both 'index' and 'by_predicate'
+    with pytest.raises(ValueError):
+        df.row(0, by_predicate=pl.col("a") == "bar")
+
+    # must call 'by_predicate' by keyword
+    with pytest.raises(TypeError):
+        df.row(None, pl.col("a") == "bar")  # type: ignore[misc]
+
+    # cannot pass predicate into 'index'
+    with pytest.raises(TypeError):
+        df.row(pl.col("a") == "bar")  # type: ignore[arg-type]
+
+    # at least one of 'index' and 'by_predicate' must be set
+    with pytest.raises(ValueError):
+        df.row()
+
+
 def test_df_apply() -> None:
     df = pl.DataFrame({"a": ["foo", "bar", "2"], "b": [1, 2, 3], "c": [1.0, 2.0, 3.0]})
     out = df.apply(lambda x: len(x), None).to_series()
@@ -1148,6 +1186,12 @@ def test_to_html(df: pl.DataFrame) -> None:
     # check it does not panic/error, and appears to contain a table
     html = df._repr_html_()
     assert "<table" in html
+
+
+def test_rows() -> None:
+    df = pl.DataFrame({"a": [1, 2], "b": [1, 2]})
+    assert df.rows() == [(1, 1), (2, 2)]
+    assert df.reverse().rows() == [(2, 2), (1, 1)]
 
 
 def test_rename(df: pl.DataFrame) -> None:
@@ -2085,11 +2129,10 @@ def test_preservation_of_subclasses_after_groupby_statements() -> None:
     )
 
     # Round-trips to PivotOps and back should also preserve subclass
-    with pytest.deprecated_call():
-        assert isinstance(
-            groupby.pivot(pivot_column="a", values_column="b").first(),
-            SubClassedDataFrame,
-        )
+    assert isinstance(
+        groupby.pivot(pivot_column="a", values_column="b").first(),
+        SubClassedDataFrame,
+    )
 
 
 def test_explode_empty() -> None:
@@ -2493,19 +2536,15 @@ def test_glimpse() -> None:
     )
     result = df.glimpse()
 
-    # Strip trailing whitespace for the purposes of this test
-    result_lines = [line.strip() for line in result.strip().split("\n")]
-    expected_lines = [
-        "Rows: 3",
-        "Columns: 6",
-        "$ a <Float64> 1.0, 2.8, 3.0",
-        "$ b   <Int64> 4, 5, None",
-        "$ c <Boolean> True, False, True",
-        "$ d    <Utf8> None, b, c",
-        "$ e    <Utf8> usd, eur, None",
-        "$ f    <Date> 2020-01-01, 2021-01-02, 2022-01-01",
-    ]
-    assert result_lines == expected_lines
+    expected = """Rows: 3
+Columns: 6
+$ a <Float64> 1.0, 2.8, 3.0                                                                             
+$ b   <Int64> 4, 5, None                                                                                
+$ c <Boolean> True, False, True                                                                         
+$ d    <Utf8> None, b, c                                                                                
+$ e    <Utf8> usd, eur, None                                                                            
+$ f    <Date> 2020-01-01, 2021-01-02, 2022-01-01"""
+    assert result.strip() == expected
 
 
 def test_item() -> None:

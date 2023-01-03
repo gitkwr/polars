@@ -544,8 +544,11 @@ def scan_csv(
     │ i64     ┆ str      │
     ╞═════════╪══════════╡
     │ 1       ┆ is       │
+    ├╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
     │ 2       ┆ terrible │
+    ├╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
     │ 3       ┆ to       │
+    ├╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌┤
     │ 4       ┆ read     │
     └─────────┴──────────┘
 
@@ -1062,7 +1065,7 @@ def read_sql(
 
     Notes
     -----
-    Make sure to install connectorx>=0.3.1. Read the documentation
+    Make sure to install connectorx>=0.2.2. Read the documentation
     `here <https://sfu-db.github.io/connector-x/intro.html>`_.
 
     Examples
@@ -1097,7 +1100,7 @@ def read_sql(
         import connectorx as cx
     except ImportError:
         raise ImportError(
-            "connectorx is not installed. Please run `pip install connectorx>=0.3.1`."
+            "connectorx is not installed. Please run `pip install connectorx>=0.2.2`."
         ) from None
 
     tbl = cx.read_sql(

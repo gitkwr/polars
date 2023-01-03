@@ -260,12 +260,6 @@ def test_from_dicts() -> None:
     assert df.schema == {"a": pl.Int64, "b": pl.Int64}
 
 
-def test_from_dict_no_inference() -> None:
-    schema = {"a": pl.Utf8}
-    data = [{"a": "aa"}]
-    pl.from_dicts(data, schema=schema, infer_schema_length=0)
-
-
 def test_from_dicts_struct() -> None:
     data = [{"a": {"b": 1, "c": 2}, "d": 5}, {"a": {"b": 3, "c": 4}, "d": 6}]
     df = pl.from_dicts(data)
@@ -496,14 +490,3 @@ def test_numpy_preserve_uint64_4112() -> None:
 def test_view_ub() -> None:
     # this would be UB if the series was dropped and not passed to the view
     assert np.sum(pl.Series([3, 1, 5]).sort().view()) == 9
-
-
-def test_arrow_list_null_5697() -> None:
-    # Create a pyarrow table with a list[null] column.
-    pa_table = pa.table([[[None]]], names=["mycol"])
-    df = pl.from_arrow(pa_table)
-    pa_table = df.to_arrow()
-    # again to polars to test the schema
-    assert pl.from_arrow(pa_table,).schema == {  # type: ignore[union-attr]
-        "mycol": pl.List(pl.Null)
-    }

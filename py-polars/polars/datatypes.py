@@ -11,6 +11,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Dict,
     ForwardRef,
     Mapping,
     Optional,
@@ -85,7 +86,7 @@ ColumnsType: TypeAlias = Union[
     Mapping[str, Union[PolarsDataType, PythonDataType]],
     Sequence[Tuple[str, Union[PolarsDataType, PythonDataType, None]]],
 ]
-Schema: TypeAlias = Mapping[str, PolarsDataType]
+Schema: TypeAlias = Dict[str, PolarsDataType]
 
 DTYPE_TEMPORAL_UNITS: frozenset[TimeUnit] = frozenset(["ns", "us", "ms"])
 
@@ -682,7 +683,7 @@ def py_type_to_dtype(
         if not raise_unmatched:
             return None
         raise NotImplementedError(
-            f"Conversion of Python data type '{data_type}' to Polars data type not"
+            f"Conversion of Python data type {data_type} to Polars data type not"
             " implemented."
         ) from None
 

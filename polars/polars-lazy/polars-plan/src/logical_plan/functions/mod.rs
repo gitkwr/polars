@@ -6,8 +6,6 @@ use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
 
 use polars_core::prelude::*;
-#[cfg(feature = "dtype-categorical")]
-use polars_core::IUseStringCache;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -183,19 +181,7 @@ impl FunctionNode {
                     panic!("activate feature 'dtype-struct'")
                 }
             }
-            Pipeline { function, .. } => {
-                // we use a global string cache here as streaming chunks all have different rev maps
-                #[cfg(feature = "dtype-categorical")]
-                {
-                    let _hold = IUseStringCache::new();
-                    Arc::get_mut(function).unwrap().call_udf(df)
-                }
-
-                #[cfg(not(feature = "dtype-categorical"))]
-                {
-                    Arc::get_mut(function).unwrap().call_udf(df)
-                }
-            }
+            Pipeline { function, .. } => Arc::get_mut(function).unwrap().call_udf(df),
         }
     }
 }

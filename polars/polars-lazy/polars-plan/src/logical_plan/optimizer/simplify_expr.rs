@@ -176,7 +176,6 @@ impl OptimizationRule for SimplifyBooleanRule {
             }
             // x or false => x
             AExpr::BinaryExpr {
-                left,
                 op: Operator::Or,
                 right,
                 ..
@@ -185,7 +184,7 @@ impl OptimizationRule for SimplifyBooleanRule {
                 AExpr::Literal(LiteralValue::Boolean(false))
             ) =>
             {
-                Some(expr_arena.get(*left).clone())
+                Some(expr_arena.get(*right).clone())
             }
 
             // false OR x => x

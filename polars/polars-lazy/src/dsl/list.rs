@@ -29,22 +29,15 @@ pub trait ListNameSpaceExtension: IntoListNameSpace + Sized {
     fn eval(self, expr: Expr, parallel: bool) -> Expr {
         let this = self.into_list_name_space();
 
-        use crate::physical_plan::exotic::prepare_expression_for_context;
+        use crate::physical_plan::exotic::{prepare_eval_expr, prepare_expression_for_context};
         use crate::physical_plan::state::ExecutionState;
+        let expr = prepare_eval_expr(expr);
 
         let expr2 = expr.clone();
         let func = move |s: Series| {
-            for name in expr_to_leaf_column_names(&expr) {
-                if !name.is_empty() {
-                    return Err(PolarsError::ComputeError(r#"Named columns not allowed in 'arr.eval'. Consider using 'element' or 'col("")'."#.into()));
-                }
-            }
-
             let lst = s.list()?;
             if lst.is_empty() {
-                // ensure we get the new schema
-                let fld = field_to_dtype(lst.ref_field(), &expr);
-                return Ok(Series::new_empty(s.name(), fld.data_type()));
+                return Ok(s);
             }
 
             let phys_expr =
@@ -105,37 +98,36 @@ pub trait ListNameSpaceExtension: IntoListNameSpace + Sized {
         this.0
             .map(
                 func,
-                GetOutput::map_field(move |f| field_to_dtype(f, &expr2)),
+                GetOutput::map_field(move |f| {
+                    // dummy df to determine output dtype
+                    let dtype = f
+                        .data_type()
+                        .inner_dtype()
+                        .cloned()
+                        .unwrap_or_else(|| f.data_type().clone());
+
+                    let df = Series::new_empty("", &dtype).into_frame();
+
+                    #[cfg(feature = "python")]
+                    let out = {
+                        use pyo3::Python;
+                        Python::with_gil(|py| {
+                            py.allow_threads(|| df.lazy().select([expr2.clone()]).collect())
+                        })
+                    };
+                    #[cfg(not(feature = "python"))]
+                    let out = { df.lazy().select([expr2.clone()]).collect() };
+
+                    match out {
+                        Ok(out) => {
+                            let dtype = out.get_columns()[0].dtype();
+                            Field::new(f.name(), DataType::List(Box::new(dtype.clone())))
+                        }
+                        Err(_) => Field::new(f.name(), DataType::Null),
+                    }
+                }),
             )
             .with_fmt("eval")
-    }
-}
-
-#[cfg(feature = "list_eval")]
-fn field_to_dtype(f: &Field, expr: &Expr) -> Field {
-    // dummy df to determine output dtype
-    let dtype = f
-        .data_type()
-        .inner_dtype()
-        .cloned()
-        .unwrap_or_else(|| f.data_type().clone());
-
-    let df = Series::new_empty("", &dtype).into_frame();
-
-    #[cfg(feature = "python")]
-    let out = {
-        use pyo3::Python;
-        Python::with_gil(|py| py.allow_threads(|| df.lazy().select([expr.clone()]).collect()))
-    };
-    #[cfg(not(feature = "python"))]
-    let out = { df.lazy().select([expr.clone()]).collect() };
-
-    match out {
-        Ok(out) => {
-            let dtype = out.get_columns()[0].dtype();
-            Field::new(f.name(), DataType::List(Box::new(dtype.clone())))
-        }
-        Err(_) => Field::new(f.name(), DataType::Null),
     }
 }
 

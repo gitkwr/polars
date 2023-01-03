@@ -88,8 +88,11 @@ class StringNameSpace:
         │ date       │
         ╞════════════╡
         │ 2021-04-22 │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2022-01-04 │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2022-01-31 │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ 2001-07-08 │
         └────────────┘
 
@@ -378,7 +381,9 @@ class StringNameSpace:
         │ str     │
         ╞═════════╡
         │ messi   │
+        ├╌╌╌╌╌╌╌╌╌┤
         │ null    │
+        ├╌╌╌╌╌╌╌╌╌┤
         │ ronaldo │
         └─────────┘
 
@@ -506,8 +511,11 @@ class StringNameSpace:
         │ str        ┆ str         │
         ╞════════════╪═════════════╡
         │ a          ┆ 1           │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ null       ┆ null        │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ c          ┆ null        │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ d          ┆ 4           │
         └────────────┴─────────────┘
 
@@ -563,8 +571,11 @@ class StringNameSpace:
         │ str        ┆ str         │
         ╞════════════╪═════════════╡
         │ foo        ┆ bar         │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ null       ┆ null        │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ foo-bar    ┆ null        │
+        ├╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┤
         │ foo        ┆ bar baz     │
         └────────────┴─────────────┘
 
@@ -638,108 +649,36 @@ class StringNameSpace:
 
         """
 
-    def strip(self, matches: str | None = None) -> pli.Series:
-        r"""
-        Remove leading and trailing characters.
+    def strip(self, matches: None | str = None) -> pli.Series:
+        """
+        Remove leading and trailing whitespace.
 
         Parameters
         ----------
         matches
-            The set of characters to be removed. All combinations of this set of
-            characters will be stripped. If set to None (default), all whitespace is
-            removed instead.
-
-        Examples
-        --------
-        >>> s = pl.Series([" hello ", "\tworld"])
-        >>> s.str.strip()
-        shape: (2,)
-        Series: '' [str]
-        [
-                "hello"
-                "world"
-        ]
-
-        Characters can be stripped by passing a string as argument. Note that whitespace
-        will not be stripped automatically when doing so.
-
-        >>> s.str.strip("od\t")
-        shape: (2,)
-        Series: '' [str]
-        [
-                " hello "
-                "worl"
-        ]
+            An optional single character that should be trimmed
 
         """
 
-    def lstrip(self, matches: str | None = None) -> pli.Series:
-        r"""
-        Remove leading characters.
+    def lstrip(self, matches: None | str = None) -> pli.Series:
+        """
+        Remove leading whitespace.
 
         Parameters
         ----------
         matches
-            The set of characters to be removed. All combinations of this set of
-            characters will be stripped. If set to None (default), all whitespace is
-            removed instead.
-
-        Examples
-        --------
-        >>> s = pl.Series([" hello ", "\tworld"])
-        >>> s.str.lstrip()
-        shape: (2,)
-        Series: '' [str]
-        [
-                "hello "
-                "world"
-        ]
-
-        Characters can be stripped by passing a string as argument. Note that whitespace
-        will not be stripped automatically when doing so.
-
-        >>> s.str.lstrip("wod\t")
-        shape: (2,)
-        Series: '' [str]
-        [
-                " hello "
-                "rld"
-        ]
+            An optional single character that should be trimmed
 
         """
 
-    def rstrip(self, matches: str | None = None) -> pli.Series:
-        r"""
-        Remove trailing characters.
+    def rstrip(self, matches: None | str = None) -> pli.Series:
+        """
+        Remove trailing whitespace.
 
         Parameters
         ----------
         matches
-            The set of characters to be removed. All combinations of this set of
-            characters will be stripped. If set to None (default), all whitespace is
-            removed instead.
-
-        Examples
-        --------
-        >>> s = pl.Series([" hello ", "world\t"])
-        >>> s.str.rstrip()
-        shape: (2,)
-        Series: '' [str]
-        [
-                " hello"
-                "world"
-        ]
-
-        Characters can be stripped by passing a string as argument. Note that whitespace
-        will not be stripped automatically when doing so.
-
-        >>> s.str.rstrip("wod\t")
-        shape: (2,)
-        Series: '' [str]
-        [
-                " hello "
-                "worl"
-        ]
+            An optional single character that should be trimmed
 
         """
 

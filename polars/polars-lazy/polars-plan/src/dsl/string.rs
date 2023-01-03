@@ -341,20 +341,20 @@ impl StringNameSpace {
         )
     }
 
-    /// Remove leading and trailing characters, or whitespace if matches is None.
-    pub fn strip(self, matches: Option<String>) -> Expr {
+    /// Remove whitespace on both sides.
+    pub fn strip(self, matches: Option<char>) -> Expr {
         self.0
             .map_private(FunctionExpr::StringExpr(StringFunction::Strip(matches)))
     }
 
-    /// Remove leading characters, or whitespace if matches is None.
-    pub fn lstrip(self, matches: Option<String>) -> Expr {
+    /// Remove leading whitespace.
+    pub fn lstrip(self, matches: Option<char>) -> Expr {
         self.0
             .map_private(FunctionExpr::StringExpr(StringFunction::LStrip(matches)))
     }
 
-    /// Remove trailing characters, or whitespace if matches is None..
-    pub fn rstrip(self, matches: Option<String>) -> Expr {
+    /// Remove trailing whitespace.
+    pub fn rstrip(self, matches: Option<char>) -> Expr {
         self.0
             .map_private(FunctionExpr::StringExpr(StringFunction::RStrip(matches)))
     }

@@ -228,12 +228,7 @@ impl Series {
 
     /// Cast `[Series]` to another `[DataType]`
     pub fn cast(&self, dtype: &DataType) -> PolarsResult<Self> {
-        let len = self.len();
-        if self.null_count() == len {
-            Ok(Series::full_null(self.name(), len, dtype))
-        } else {
-            self.0.cast(dtype)
-        }
+        self.0.cast(dtype)
     }
 
     /// Compute the sum of all values in this Series.
@@ -833,13 +828,7 @@ impl Series {
             AnyValue::Utf8(s) => Cow::Borrowed(s),
             AnyValue::Null => Cow::Borrowed("null"),
             #[cfg(feature = "dtype-categorical")]
-            AnyValue::Categorical(idx, rev, arr) => {
-                if arr.is_null() {
-                    Cow::Borrowed(rev.get(idx))
-                } else {
-                    unsafe { Cow::Borrowed(arr.deref_unchecked().value(idx as usize)) }
-                }
-            }
+            AnyValue::Categorical(idx, rev) => Cow::Borrowed(rev.get(idx)),
             av => Cow::Owned(format!("{av}")),
         };
         Ok(out)

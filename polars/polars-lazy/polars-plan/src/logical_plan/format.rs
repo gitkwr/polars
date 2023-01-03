@@ -5,14 +5,14 @@ use std::path::Path;
 
 use crate::prelude::*;
 
-fn write_scan<P: Display>(
+fn write_scan(
     f: &mut fmt::Formatter,
     name: &str,
     path: &Path,
     indent: usize,
     n_columns: i64,
     total_columns: usize,
-    predicate: &Option<P>,
+    predicate: &Option<Expr>,
 ) -> fmt::Result {
     writeln!(f, "{:indent$}{} SCAN {}", "", name, path.to_string_lossy(),)?;
     if n_columns > 0 {
@@ -24,10 +24,7 @@ fn write_scan<P: Display>(
     } else {
         writeln!(f, "{:indent$}PROJECT */{total_columns} COLUMNS", "",)?;
     }
-    if let Some(predicate) = predicate {
-        writeln!(f, "{:indent$}SELECTION: {predicate}", "")?;
-    }
-    Ok(())
+    writeln!(f, "{:indent$}SELECTION: {predicate:?}", "")
 }
 
 impl LogicalPlan {
@@ -36,24 +33,7 @@ impl LogicalPlan {
         use LogicalPlan::*;
         match self {
             #[cfg(feature = "python")]
-            PythonScan { options } => {
-                let total_columns = options.schema.len();
-                let n_columns = options
-                    .with_columns
-                    .as_ref()
-                    .map(|s| s.len() as i64)
-                    .unwrap_or(-1);
-
-                write_scan(
-                    f,
-                    "PYTHON",
-                    Path::new(""),
-                    indent,
-                    n_columns,
-                    total_columns,
-                    &options.predicate,
-                )
-            }
+            PythonScan { .. } => writeln!(f, "{:indent$}PYTHON SCAN\n", ""),
             AnonymousScan {
                 file_info,
                 predicate,

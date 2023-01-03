@@ -27,22 +27,19 @@ pub(crate) unsafe fn drop_list(ca: &mut ListChunked) {
                 let arr = lst_arr.as_any().downcast_ref::<LargeListArray>().unwrap();
 
                 let values = arr.values();
-                drop_object_array(values.as_ref())
+
+                let arr = values
+                    .as_any()
+                    .downcast_ref::<FixedSizeBinaryArray>()
+                    .unwrap();
+
+                // if the buf is not shared with anyone but us
+                // we can deallocate
+                let buf = arr.values();
+                if buf.shared_count_strong() == 1 {
+                    PolarsExtension::new(arr.clone());
+                };
             }
         }
     }
-}
-
-pub(crate) unsafe fn drop_object_array(values: &dyn Array) {
-    let arr = values
-        .as_any()
-        .downcast_ref::<FixedSizeBinaryArray>()
-        .unwrap();
-
-    // if the buf is not shared with anyone but us
-    // we can deallocate
-    let buf = arr.values();
-    if buf.shared_count_strong() == 1 {
-        PolarsExtension::new(arr.clone());
-    };
 }

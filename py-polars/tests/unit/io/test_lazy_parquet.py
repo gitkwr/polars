@@ -158,34 +158,3 @@ def test_parquet_statistics(io_test_dir: str, capfd: CaptureFixture[str]) -> Non
         "parquet file can be skipped, the statistics were sufficient"
         " to apply the predicate." in captured
     )
-
-
-def test_streaming_categorical() -> None:
-    if os.name != "nt":
-        pl.DataFrame(
-            [
-                pl.Series("name", ["Bob", "Alice", "Bob"], pl.Categorical),
-                pl.Series("amount", [100, 200, 300]),
-            ]
-        ).write_parquet("/tmp/tmp.pq")
-        with pl.StringCache():
-            assert pl.scan_parquet("/tmp/tmp.pq").groupby("name").agg(
-                pl.col("amount").sum()
-            ).collect().to_dict(False) == {
-                "name": ["Bob", "Alice"],
-                "amount": [400, 200],
-            }
-
-
-def test_parquet_struct_categorical() -> None:
-    if os.name != "nt":
-        df = pl.DataFrame(
-            [
-                pl.Series("a", ["bob"], pl.Categorical),
-                pl.Series("b", ["foo"], pl.Categorical),
-            ]
-        )
-        df.write_parquet("/tmp/tmp.pq")
-        with pl.StringCache():
-            out = pl.read_parquet("/tmp/tmp.pq").select(pl.col("b").value_counts())
-        assert out.to_dict(False) == {"b": [{"b": "foo", "counts": 1}]}

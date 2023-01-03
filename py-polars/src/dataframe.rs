@@ -441,8 +441,7 @@ impl PyDataFrame {
         infer_schema_length: Option<usize>,
         schema_overwrite: Option<Wrap<Schema>>,
     ) -> PyResult<Self> {
-        let infer_schema_length = std::cmp::max(infer_schema_length.unwrap_or(50), 1);
-        let (rows, mut names) = dicts_to_rows(dicts, infer_schema_length)?;
+        let (rows, mut names) = dicts_to_rows(dicts, infer_schema_length.unwrap_or(50))?;
 
         // ensure the new names are used
         if let Some(schema) = &schema_overwrite {
@@ -452,7 +451,7 @@ impl PyDataFrame {
         }
         let mut pydf = Self::finish_from_rows(
             rows,
-            Some(infer_schema_length),
+            infer_schema_length,
             schema_overwrite.map(|wrap| wrap.0),
         )?;
 

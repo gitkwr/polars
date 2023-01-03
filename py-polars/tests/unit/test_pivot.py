@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pytest
-
 import polars as pl
 
 if TYPE_CHECKING:
@@ -33,12 +31,10 @@ def test_pivot() -> None:
             "c": [2, 4, None, 8, 10],
         }
     )
-
-    with pytest.deprecated_call():
-        gb = df.groupby("b").pivot(
-            pivot_column="a",
-            values_column="c",
-        )
+    gb = df.groupby("b").pivot(
+        pivot_column="a",
+        values_column="c",
+    )
     assert gb.count().rows() == [("a", 2, None, None), ("b", None, 2, 1)]
     assert gb.first().rows() == [("a", 2, None, None), ("b", None, None, 10)]
     assert gb.max().rows() == [("a", 4, None, None), ("b", None, 8, 10)]
@@ -63,9 +59,7 @@ def test_pivot() -> None:
             "bar": ["k", "l", "m", "n", "o"],
         }
     )
-    with pytest.deprecated_call():
-        out = df.groupby("foo").pivot(pivot_column="bar", values_column="N").first()
-
+    out = df.groupby("foo").pivot(pivot_column="bar", values_column="N").first()
     assert out.shape == (3, 6)
     assert out.rows() == [
         ("A", 1, 2, None, None, None),

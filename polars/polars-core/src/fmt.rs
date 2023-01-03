@@ -426,7 +426,6 @@ impl Display for DataFrame {
                 .unwrap_or("DEFAULT")
             {
                 "ASCII_FULL" => ASCII_FULL,
-                "ASCII_FULL_CONDENSED" => ASCII_FULL_CONDENSED,
                 "ASCII_NO_BORDERS" => ASCII_NO_BORDERS,
                 "ASCII_BORDERS_ONLY" => ASCII_BORDERS_ONLY,
                 "ASCII_BORDERS_ONLY_CONDENSED" => ASCII_BORDERS_ONLY_CONDENSED,
@@ -438,8 +437,8 @@ impl Display for DataFrame {
                 "UTF8_BORDERS_ONLY" => UTF8_BORDERS_ONLY,
                 "UTF8_HORIZONTAL_ONLY" => UTF8_HORIZONTAL_ONLY,
                 "NOTHING" => NOTHING,
-                "DEFAULT" => UTF8_FULL_CONDENSED,
-                _ => UTF8_FULL_CONDENSED,
+                "DEFAULT" => UTF8_FULL,
+                _ => UTF8_FULL,
             };
 
             let mut table = Table::new();
@@ -746,19 +745,13 @@ impl Display for AnyValue<'_> {
                 write!(f, "{nt}")
             }
             #[cfg(feature = "dtype-categorical")]
-            AnyValue::Categorical(idx, rev, arr) => {
-                let s = if arr.is_null() {
-                    rev.get(*idx)
-                } else {
-                    unsafe { arr.deref_unchecked().value(*idx as usize) }
-                };
+            AnyValue::Categorical(idx, rev) => {
+                let s = rev.get(*idx);
                 write!(f, "\"{s}\"")
             }
             AnyValue::List(s) => write!(f, "{}", s.fmt_list()),
             #[cfg(feature = "object")]
             AnyValue::Object(v) => write!(f, "{v}"),
-            #[cfg(feature = "object")]
-            AnyValue::ObjectOwned(v) => write!(f, "{}", v.0.as_ref()),
             #[cfg(feature = "dtype-struct")]
             av @ AnyValue::Struct(_, _, _) => {
                 let mut avs = vec![];

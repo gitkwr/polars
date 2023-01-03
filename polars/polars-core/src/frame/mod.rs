@@ -1837,9 +1837,6 @@ impl DataFrame {
         nulls_last: bool,
         slice: Option<(i64, usize)>,
     ) -> PolarsResult<Self> {
-        if self.height() == 0 {
-            return Ok(self.clone());
-        }
         // note that the by_column argument also contains evaluated expression from polars-lazy
         // that may not even be present in this dataframe.
 
@@ -2473,9 +2470,9 @@ impl DataFrame {
     ///                          "object" => &["a", "b", "c"])?;
     /// assert_eq!(df1.shape(), (3, 3));
     ///
-    /// let df2: DataFrame = df1.describe(None)?;
-    /// assert_eq!(df2.shape(), (9, 4));
-    /// dbg!(df2);
+    /// let df2: DataFrame = df1.describe(None);
+    /// assert_eq!(df2.shape(), (8, 4));
+    /// println!("{}", df2);
     /// # Ok::<(), PolarsError>(())
     /// ```
     ///
@@ -2483,42 +2480,39 @@ impl DataFrame {
     ///
     /// ```text
     /// shape: (8, 4)
-    /// ┌────────────┬─────────────┬─────────┬────────┐
-    /// │ describe   ┆ categorical ┆ numeric ┆ object │
-    /// │ ---        ┆ ---         ┆ ---     ┆ ---    │
-    /// │ str        ┆ str         ┆ f64     ┆ str    │
-    /// ╞════════════╪═════════════╪═════════╪════════╡
-    /// │ count      ┆ 3           ┆ 3.0     ┆ 3      │
-    /// │ null_count ┆ 0           ┆ 0.0     ┆ 0      │
-    /// │ mean       ┆ null        ┆ 2.0     ┆ null   │
-    /// │ std        ┆ null        ┆ 1.0     ┆ null   │
-    /// │ min        ┆ d           ┆ 1,0     ┆ a      │
-    /// │ 25%        ┆ null        ┆ 1.5     ┆ null   │
-    /// │ 50%        ┆ null        ┆ 2.0     ┆ null   │
-    /// │ 75%        ┆ null        ┆ 2.5     ┆ null   │
-    /// │ max        ┆ f           ┆ 3.0     ┆ c      │
-    /// └────────────┴─────────────┴─────────┴────────┘
+    /// ┌──────────┬─────────────┬─────────┬────────┐
+    /// │ describe ┆ categorical ┆ numeric ┆ object │
+    /// │ ---      ┆ ---         ┆ ---     ┆ ---    │
+    /// │ str      ┆ f64         ┆ f64     ┆ f64    │
+    /// ╞══════════╪═════════════╪═════════╪════════╡
+    /// │ count    ┆ 3.0         ┆ 3.0     ┆ 3.0    │
+    /// ├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
+    /// │ mean     ┆ null        ┆ 2.0     ┆ null   │
+    /// ├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
+    /// │ std      ┆ null        ┆ 1.0     ┆ null   │
+    /// ├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
+    /// │ min      ┆ null        ┆ 1.0     ┆ null   │
+    /// ├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
+    /// │ 25%      ┆ null        ┆ 1.5     ┆ null   │
+    /// ├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
+    /// │ 50%      ┆ null        ┆ 2.0     ┆ null   │
+    /// ├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
+    /// │ 75%      ┆ null        ┆ 2.5     ┆ null   │
+    /// ├╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌┤
+    /// │ max      ┆ null        ┆ 3.0     ┆ null   │
+    /// └──────────┴─────────────┴─────────┴────────┘
     /// ```
+    #[must_use]
     #[cfg(feature = "describe")]
-    pub fn describe(&self, percentiles: Option<&[f64]>) -> PolarsResult<Self> {
-        fn describe_cast(df: &DataFrame, original_schema: &Schema) -> PolarsResult<DataFrame> {
-            let columns = df
-                .columns
-                .iter()
-                .zip(original_schema.iter_dtypes())
-                .map(|(s, original_dt)| {
-                    if original_dt.is_numeric() | matches!(original_dt, DataType::Boolean) {
-                        s.cast(&DataType::Float64)
-                    }
-                    // for dates, strings, etc, we cast to string so that all
-                    // statistics can be shown
-                    else {
-                        s.cast(&DataType::Utf8)
-                    }
-                })
-                .collect::<PolarsResult<Vec<Series>>>()?;
+    pub fn describe(&self, percentiles: Option<&[f64]>) -> Self {
+        fn describe_cast(df: &DataFrame) -> DataFrame {
+            let mut columns: Vec<Series> = vec![];
 
-            DataFrame::new(columns)
+            for s in df.columns.iter() {
+                columns.push(s.cast(&DataType::Float64).expect("cast to float failed"));
+            }
+
+            DataFrame::new(columns).unwrap()
         }
 
         fn count(df: &DataFrame) -> DataFrame {
@@ -2530,39 +2524,38 @@ impl DataFrame {
 
         let mut headers: Vec<String> = vec![
             "count".to_string(),
-            "null_count".to_string(),
             "mean".to_string(),
             "std".to_string(),
             "min".to_string(),
         ];
 
-        let original_schema = self.schema();
-
         let mut tmp: Vec<DataFrame> = vec![
-            describe_cast(&count(self), &original_schema)?,
-            describe_cast(&self.null_count(), &original_schema)?,
-            describe_cast(&self.mean(), &original_schema)?,
-            describe_cast(&self.std(1), &original_schema)?,
-            describe_cast(&self.min(), &original_schema)?,
+            describe_cast(&count(self)),
+            describe_cast(&self.mean()),
+            describe_cast(&self.std(1)),
+            describe_cast(&self.min()),
         ];
 
         for p in percentiles {
             tmp.push(describe_cast(
-                &self.quantile(*p, QuantileInterpolOptions::Linear)?,
-                &original_schema,
-            )?);
+                &self
+                    .quantile(*p, QuantileInterpolOptions::Linear)
+                    .expect("quantile failed"),
+            ));
             headers.push(format!("{}%", *p * 100.0));
         }
 
         // Keep order same as pandas
-        tmp.push(describe_cast(&self.max(), &original_schema)?);
+        tmp.push(describe_cast(&self.max()));
         headers.push("max".to_string());
 
         let mut summary = concat_df_unchecked(&tmp);
 
-        summary.insert_at_idx(0, Series::new("describe", headers))?;
+        summary
+            .insert_at_idx(0, Series::new("describe", headers))
+            .expect("insert of header failed");
 
-        Ok(summary)
+        summary
     }
 
     /// Aggregate the columns to their maximum values.
@@ -3680,18 +3673,9 @@ mod test {
 
         assert_eq!(df1.shape(), (3, 3));
 
-        let df2: DataFrame = df1.describe(None)?;
+        let df2: DataFrame = df1.describe(None);
 
-        assert_eq!(df2.shape(), (9, 4));
-
-        let expected = df!(
-            "describe" => ["count", "null_count", "mean", "std", "min", "25%", "50%", "75%", "max"],
-            "categorical" => [Some("3"), Some("0"), None, None, Some("d"), None, None, None, Some("f")],
-            "numeric" => [3.0, 0.0, 2.0, 1.0, 1.0, 1.5, 2.0, 2.5, 3.0],
-            "object" => [Some("3"), Some("0"), None, None, Some("a"), None, None, None, Some("c")],
-        ).unwrap();
-
-        assert_eq!(df2, expected);
+        assert_eq!(df2.shape(), (8, 4));
 
         Ok(())
     }
